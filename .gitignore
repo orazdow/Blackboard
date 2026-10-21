@@ -1,0 +1,7 @@
+node_modules/
+client/src/config.local.js
+client/auth/
+*.pem
+__pycache__/
+client/dist/main.js
+client/dist/main.js.map

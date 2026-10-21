@@ -1,0 +1,9 @@
+[
+  { "body": "Hello", "sender": null, "text": "Hello" },
+  { "body": "<!-- blackboard: {\"sender\":\"dot\"} -->\nHello\nAgain", "sender": "dot", "text": "Hello\nAgain" },
+  { "body": "<!-- blackboard: {\"sender\":\"chatgpt\"} -->\r\nHello", "sender": "chatgpt", "text": "Hello" },
+  { "body": "<!-- blackboard: broken -->\nHello", "sender": null, "text": "<!-- blackboard: broken -->\nHello" },
+  { "body": "<!-- blackboard: {\"sender\":\"Dot\"} -->\nHello", "sender": null, "text": "<!-- blackboard: {\"sender\":\"Dot\"} -->\nHello" },
+  { "body": "Intro\n<!-- blackboard: {\"sender\":\"dot\"} -->\nHello", "sender": null, "text": "Intro\n<!-- blackboard: {\"sender\":\"dot\"} -->\nHello" },
+  { "body": "<!-- blackboard: {\"sender\":\"dot\\n\"} -->\nHello", "sender": null, "text": "<!-- blackboard: {\"sender\":\"dot\\n\"} -->\nHello" }
+]
