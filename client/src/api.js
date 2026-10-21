@@ -57,6 +57,7 @@ export function createGitHubClient({
   const inFlight = new Map();
   let queue = Promise.resolve();
   let lastWriteAt = 0;
+  let viewerPromise;
 
   function request(path, options = {}) {
     const reading = !options.method || options.method === 'GET';
@@ -80,7 +81,7 @@ export function createGitHubClient({
     return url.href.slice(base.length);
   }
 
-  async function performRequest(path, { method = 'GET', body, graphql = false } = {}) {
+  async function performRequest(path, { method = 'GET', body, graphql = false, apiRoot = false } = {}) {
     if (!token || !owner || !repo) throw new GitHubError('Fill in GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO in src/config.local.js.');
     if (Date.now() < retryAt) throw new GitHubError('GitHub rate limit reached. Waiting before another request.', { retryAt });
     const writing = method !== 'GET';
@@ -95,7 +96,7 @@ export function createGitHubClient({
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
-      const response = await fetchImpl(graphql ? 'https://api.github.com/graphql' : `${base}${path}`, {
+      const response = await fetchImpl(graphql ? 'https://api.github.com/graphql' : apiRoot ? `https://api.github.com${path}` : `${base}${path}`, {
         method,
         signal: controller.signal,
         cache: 'no-store',
@@ -181,8 +182,32 @@ export function createGitHubClient({
     if (!Number.isSafeInteger(id) || id < 1) throw new GitHubError('Invalid channel ID.');
     return `/issues/${id}`;
   };
+  const reactionPath = (commentId) => {
+    if (!Number.isSafeInteger(commentId) || commentId < 1) throw new GitHubError('Invalid comment ID.');
+    return `/issues/comments/${commentId}/reactions`;
+  };
+  const reaction = (entry) => ({ id: entry.id, type: entry.content, author: entry.user.login });
 
   return {
+    async getViewer() {
+      if (!viewerPromise) {
+        viewerPromise = request('/user', { apiRoot: true }).then((user) => user.login)
+          .catch((failure) => { viewerPromise = null; throw failure; });
+      }
+      return viewerPromise;
+    },
+    async listReactions(commentId) {
+      return (await listAll(reactionPath(commentId))).map(reaction);
+    },
+    async addReaction(commentId, type) {
+      if (!REACTION_TYPES.includes(type)) throw new GitHubError('Unsupported reaction.');
+      return reaction(await request(reactionPath(commentId), { method: 'POST', body: { content: type } }));
+    },
+    async removeReaction(commentId, reactionId) {
+      const path = reactionPath(commentId);
+      if (!Number.isSafeInteger(reactionId) || reactionId < 1) throw new GitHubError('Invalid reaction ID.');
+      await request(`${path}/${reactionId}`, { method: 'DELETE' });
+    },
     async listChannels({ includeClosed = false, includeArchived = false } = {}) {
       const issues = await listAll(`/issues?state=${includeClosed ? 'all' : 'open'}&sort=created&direction=asc`);
       return issues.filter((issue) => !issue.pull_request && issue.title.startsWith(CHANNEL_PREFIX))

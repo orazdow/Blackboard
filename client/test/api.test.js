@@ -10,6 +10,58 @@ const issue = (number, extra = {}) => ({
 const comment = (id) => ({ id, user: { login: 'agent' }, body: 'Hello', created_at: '2026-10-20T19:00:00Z', html_url: 'https://github.com/example/chat' });
 const client = (fetch, extra = {}) => createGitHubClient({ token: 'test-token', owner: 'example', repo: 'chat', fetch, minWriteInterval: 0, ...extra });
 
+test('reaction ownership uses the authenticated viewer and caches that identity', async () => {
+  let calls = 0;
+  const api = client(async (url, options) => {
+    calls++;
+    assert.equal(url, 'https://api.github.com/user');
+    assert.equal(options.headers.Authorization, 'Bearer test-token');
+    return Response.json({ login: 'viewer' });
+  });
+  assert.deepEqual(await Promise.all([api.getViewer(), api.getViewer()]), ['viewer', 'viewer']);
+  assert.equal(await api.getViewer(), 'viewer');
+  assert.equal(calls, 1);
+});
+
+test('reaction listing follows pagination and preserves individual ownership', async () => {
+  let calls = 0;
+  const api = client(async (url) => {
+    calls++;
+    assert.match(url, /\/issues\/comments\/7\/reactions\?/);
+    return Response.json([{ id: calls, content: 'heart', user: { login: calls === 1 ? 'viewer' : 'other' } }], {
+      headers: calls === 1 ? { link: '<https://api.github.com/repos/example/chat/issues/comments/7/reactions?per_page=100&page=2>; rel="next"' } : {},
+    });
+  });
+  assert.deepEqual(await api.listReactions(7), [
+    { id: 1, type: 'heart', author: 'viewer' },
+    { id: 2, type: 'heart', author: 'other' },
+  ]);
+});
+
+test('adds an emoji reaction and deletes the specified reaction', async () => {
+  const calls = [];
+  const api = client(async (url, options) => {
+    calls.push({ url, options });
+    if (options.method === 'DELETE') return new Response(null, { status: 204 });
+    return Response.json({ id: 42, content: 'heart', user: { login: 'viewer' } }, { status: 201 });
+  });
+  assert.deepEqual(await api.addReaction(7, 'heart'), { id: 42, type: 'heart', author: 'viewer' });
+  await api.removeReaction(7, 42);
+  assert.equal(calls[0].url, 'https://api.github.com/repos/example/chat/issues/comments/7/reactions');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { content: 'heart' });
+  assert.equal(calls[1].url, `${calls[0].url}/42`);
+  assert.equal(calls[1].options.method, 'DELETE');
+});
+
+test('invalid reactions cannot issue requests', async () => {
+  const api = client(async () => assert.fail('Unexpected request'));
+  await assert.rejects(api.addReaction(7, 'unknown'), /Unsupported reaction/);
+  await assert.rejects(api.listReactions(0), /Invalid comment/);
+  await assert.rejects(api.addReaction(-1, 'heart'), /Invalid comment/);
+  await assert.rejects(api.removeReaction(7, 0), /Invalid reaction/);
+});
+
 test('sender metadata round trips without changing the GitHub author', async () => {
   const api = client(async (url, options) => {
     const { body } = JSON.parse(options.body);

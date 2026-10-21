@@ -1,8 +1,16 @@
 import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from 'solid-js';
 import { createGitHubClient, isConfigured, GITHUB_OWNER, GITHUB_REPO } from './api.js';
+import { createTopicTracker } from './topic-state.js';
 
 const formatTime = (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const POLL_INTERVAL_MS = 10000;
+const topicSelectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:topic`;
+function savedTopic() {
+  try {
+    const id = Number(sessionStorage.getItem(topicSelectionKey));
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+  } catch { return null; }
+}
 const reactionSymbols = {
   '+1': ['👍', 'Thumbs up'], '-1': ['👎', 'Thumbs down'],
   laugh: ['😄', 'Laugh'], confused: ['😕', 'Confused'], heart: ['❤️', 'Heart'],
@@ -11,20 +19,36 @@ const reactionSymbols = {
 
 export default function App() {
   const api = createGitHubClient();
+  const topicTracker = createTopicTracker();
   const [topics, setTopics] = createSignal([]);
   const [creatingTopic, setCreatingTopic] = createSignal(false);
   const [topicName, setTopicName] = createSignal('');
-  const [activeId, setActiveId] = createSignal(null);
+  const [activeId, setActiveId] = createSignal(savedTopic());
+  createEffect(() => {
+    const id = activeId();
+    try {
+      if (id === null) sessionStorage.removeItem(topicSelectionKey);
+      else sessionStorage.setItem(topicSelectionKey, String(id));
+    } catch { /* Selection still works when browser storage is unavailable. */ }
+  });
   const [messages, setMessages] = createSignal({});
   const [drafts, setDrafts] = createSignal({});
   const [creating, setCreating] = createSignal(false);
   const [createUncertain, setCreateUncertain] = createSignal(false);
+  const [pendingTopic, setPendingTopic] = createSignal(null);
   const [closing, setClosing] = createSignal({});
   const [statusChange, setStatusChange] = createSignal(null);
   const [statusError, setStatusError] = createSignal('');
   const [removeTarget, setRemoveTarget] = createSignal(null);
   const [removeError, setRemoveError] = createSignal('');
   const [confirmDelete, setConfirmDelete] = createSignal(false);
+  const [reactionTarget, setReactionTarget] = createSignal(null);
+  const [reactionRecords, setReactionRecords] = createSignal([]);
+  const [reactionViewer, setReactionViewer] = createSignal(null);
+  const [reactionLoading, setReactionLoading] = createSignal(false);
+  const [reactionBusy, setReactionBusy] = createSignal(false);
+  const [reactionError, setReactionError] = createSignal('');
+  const ownReaction = (type) => reactionRecords().find((entry) => entry.type === type && entry.author === reactionViewer());
   const [outbox, setOutbox] = createSignal({});
   const [error, setError] = createSignal('');
   const [syncing, setSyncing] = createSignal(false);
@@ -61,6 +85,9 @@ export default function App() {
   let newTopicButton;
   let statusDialog;
   let removeDialog;
+  let reactionDialog;
+  let reactionLoadVersion = 0;
+  const messageRevisions = new Map();
   let stopped = false;
   let syncingNow = false;
   let failures = 0;
@@ -78,10 +105,10 @@ export default function App() {
     try {
       const revision = channelRevision;
       const allChannels = await api.listChannels({ includeClosed: true, includeArchived: true });
-      const channels = allChannels.filter((item) => !item.archived);
       if (stopped) return;
       if (revision === channelRevision) {
         batch(() => {
+          const channels = topicTracker.reconcile(allChannels).filter((item) => !item.archived);
           setTopics(channels);
           if (!channels.some((item) => item.id === activeId())) {
             setActiveId((channels.find((item) => item.state === 'open') || channels[0])?.id ?? null);
@@ -116,8 +143,9 @@ export default function App() {
 
   async function loadMessages(id) {
     if (id == null) return;
+    const revision = messageRevisions.get(id);
     const incoming = await api.readMessages(id);
-    if (stopped) return;
+    if (stopped || messageRevisions.get(id) !== revision) return;
     // Preserve a newly confirmed local send if this read started before it.
     setMessages((previous) => {
       const merged = new Map([...(previous[id] || []), ...incoming].map((item) => [item.id, item]));
@@ -128,6 +156,55 @@ export default function App() {
   async function selectTopic(id) {
     setActiveId(id);
     try { await loadMessages(id); } catch (failure) { if (!stopped) setError(failure.message); }
+  }
+
+  async function openReactions(commentId) {
+    const version = ++reactionLoadVersion;
+    setReactionTarget({ commentId, channelId: activeId() });
+    setReactionRecords([]);
+    setReactionViewer(null);
+    setReactionError('');
+    setReactionLoading(true);
+    reactionDialog.showModal();
+    try {
+      const viewer = await api.getViewer();
+      const records = await api.listReactions(commentId);
+      if (version !== reactionLoadVersion || stopped) return;
+      setReactionViewer(viewer);
+      setReactionRecords(records);
+    } catch (failure) {
+      if (version === reactionLoadVersion && !stopped) setReactionError(failure.message);
+    } finally {
+      if (version === reactionLoadVersion) setReactionLoading(false);
+    }
+  }
+
+  async function toggleReaction(type) {
+    const target = reactionTarget();
+    if (!target || reactionLoading() || reactionBusy() || !reactionViewer()) return;
+    const existing = ownReaction(type);
+    setReactionBusy(true);
+    setReactionError('');
+    try {
+      let records;
+      if (existing) {
+        await api.removeReaction(target.commentId, existing.id);
+        records = reactionRecords().filter((entry) => entry.id !== existing.id);
+      } else {
+        const added = await api.addReaction(target.commentId, type);
+        records = [...reactionRecords().filter((entry) => entry.id !== added.id), added];
+      }
+      const types = Object.keys(reactionSymbols).filter((key) => records.some((entry) => entry.type === key));
+      messageRevisions.set(target.channelId, (messageRevisions.get(target.channelId) || 0) + 1);
+      setMessages((previous) => ({ ...previous, [target.channelId]: (previous[target.channelId] || []).map((message) =>
+        message.id === target.commentId ? { ...message, reactions: types } : message) }));
+      reactionDialog.close();
+    } catch (failure) {
+      // Reaction create/delete is idempotent. Reload ownership before allowing
+      // another action if delivery is uncertain, rather than guessing a toggle.
+      setReactionError(failure.message);
+      if (failure.uncertain) setReactionViewer(null);
+    } finally { setReactionBusy(false); }
   }
 
   onMount(() => {
@@ -153,16 +230,21 @@ export default function App() {
     const name = topicName().trim();
     if (!name || creating() || createUncertain() || !isConfigured) return;
     setCreating(true);
+    setPendingTopic({ name, status: 'creating' });
     setError('');
     try {
-      const created = await api.createChannel({ name });
+      const created = topicTracker.remember(await api.createChannel({ name }));
       channelRevision += 1;
-      setTopics((previous) => [...previous.filter((item) => item.id !== created.id), created]);
-      setActiveId(created.id);
+      batch(() => {
+        setTopics((previous) => [...previous.filter((item) => item.id !== created.id), created]);
+        setActiveId(created.id);
+        setPendingTopic(null);
+      });
       setCreating(false);
       closeTopicForm();
     } catch (failure) {
       setCreateUncertain(failure.uncertain);
+      setPendingTopic(failure.uncertain ? { name, status: 'unconfirmed' } : null);
       setError(failure.message);
     } finally { setCreating(false); }
   }
@@ -191,6 +273,8 @@ export default function App() {
     try {
       if (target === 'deleted') await api.deleteChannel(id);
       else await api.archiveChannel(id);
+      if (target === 'deleted') topicTracker.remove(id);
+      else topicTracker.remember({ ...topics().find((entry) => entry.id === id), id, archived: true });
       channelRevision += 1;
       batch(() => {
         const remaining = topics().filter((entry) => entry.id !== id);
@@ -215,7 +299,7 @@ export default function App() {
     setClosing((previous) => ({ ...previous, [id]: { target, status: 'pending' } }));
     setStatusError('');
     try {
-      const updated = await (target === 'closed' ? api.closeChannel(id) : api.reopenChannel(id));
+      const updated = topicTracker.remember(await (target === 'closed' ? api.closeChannel(id) : api.reopenChannel(id)));
       channelRevision += 1;
       batch(() => {
         setTopics((previous) => previous.map((item) => item.id === id ? updated : item));
@@ -308,7 +392,7 @@ export default function App() {
         </div>
         <nav class="channel-list" aria-label="Topics">
           <For each={topics()}>{(item) => (
-            <div class="channel-row" classList={{ 'is-active': activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) }} aria-busy={closing()[item.id]?.status === 'pending'}>
+            <div class="channel-row" classList={{ 'is-active': activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) || item.syncState === 'confirming' }} aria-busy={closing()[item.id]?.status === 'pending' || item.syncState === 'confirming'}>
             <button
               type="button"
               class="channel-button"
@@ -316,7 +400,7 @@ export default function App() {
               onClick={() => selectTopic(item.id)}
             >
               <span class="channel-hash" aria-hidden="true">#</span>{item.name}
-              <Show when={closing()[item.id] || item.state === 'closed'}><small>{statusLabel(item.id) || 'Closed'}</small></Show>
+              <Show when={closing()[item.id] || item.syncState || item.state === 'closed'}><small role="status">{statusLabel(item.id) || (item.syncState === 'confirming' ? 'Syncing…' : 'Closed')}</small></Show>
             </button>
             <button type="button" class="remove-topic-button"
               disabled={Boolean(closing()[item.id])}
@@ -324,6 +408,14 @@ export default function App() {
               aria-haspopup="dialog" onClick={() => requestRemoval(item)}><span aria-hidden="true">−</span></button>
             </div>
           )}</For>
+          <Show when={pendingTopic()}>{(pending) => (
+            <div class="channel-row is-pending" aria-busy={pending().status === 'creating'}>
+              <div class="channel-button">
+                <span class="channel-hash" aria-hidden="true">#</span>{pending().name}
+                <small role="status">{pending().status === 'creating' ? 'Creating…' : 'Unconfirmed'}</small>
+              </div>
+            </div>
+          )}</Show>
         </nav>
         <footer class="sidebar-footer">
           <span class="status-dot" classList={{ 'is-connected': Boolean(lastSync()) }} />
@@ -375,13 +467,17 @@ export default function App() {
                   <time dateTime={message.time.toISOString()}>{formatTime(message.time)}</time>
                 </div>
                 <p class="message-text">{message.text}</p>
-                <Show when={message.reactions?.length}>
                   <div class="message-reactions" role="group" aria-label="Reactions">
                     <For each={message.reactions}>{(type) => (
                       <span role="img" aria-label={reactionSymbols[type][1]} title={reactionSymbols[type][1]}>{reactionSymbols[type][0]}</span>
                     )}</For>
+                    <button type="button" class="reaction-add" aria-label="Add or remove a reaction" aria-haspopup="dialog" title="React" onClick={() => openReactions(message.id)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                        <path d="M21 13a9 9 0 1 1-10-10M8 14c1.8 2 6.2 2 8 0M17 4h6m-3-3v6" />
+                        <path d="M8 9h.01M14 9h.01" stroke-width="3" />
+                      </svg>
+                    </button>
                   </div>
-                </Show>
               </div>
             </article>
           )}</For>
@@ -428,6 +524,25 @@ export default function App() {
             </div>
           </form>
         )}</Show>
+      </dialog>
+      <dialog ref={reactionDialog} class="topic-status-dialog reaction-dialog" aria-labelledby="reaction-title"
+        onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, reactionBusy())}
+        onCancel={(event) => { if (reactionBusy()) event.preventDefault(); }}
+        onClose={() => { reactionLoadVersion++; setReactionTarget(null); setReactionLoading(false); }}>
+        <h2 id="reaction-title">React</h2>
+        <div class="reaction-choices" aria-busy={reactionLoading() || reactionBusy()}>
+          <For each={Object.keys(reactionSymbols)}>{(type) => (
+            <button type="button" class="reaction-choice" classList={{ 'is-selected': Boolean(ownReaction(type)) }}
+              aria-pressed={Boolean(ownReaction(type))}
+              aria-label={`${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`}
+              title={`${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`}
+              disabled={reactionLoading() || reactionBusy() || !reactionViewer()}
+              onClick={() => toggleReaction(type)}>{reactionSymbols[type][0]}</button>
+          )}</For>
+        </div>
+        <Show when={reactionLoading() || reactionBusy()}><p role="status">{reactionLoading() ? 'Loading…' : 'Saving…'}</p></Show>
+        <Show when={reactionError()}><p class="dialog-error" role="alert">{reactionError()}</p></Show>
+        <div class="dialog-actions"><button type="button" autofocus disabled={reactionBusy()} onClick={() => reactionDialog.close()}>Cancel</button></div>
       </dialog>
       <dialog ref={removeDialog} class="topic-status-dialog" aria-labelledby="remove-topic-title"
         onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, removalPending())}

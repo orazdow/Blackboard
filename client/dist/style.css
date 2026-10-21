@@ -199,13 +199,20 @@ textarea::placeholder {
 .message-meta time { color: var(--color-muted); font-size: 0.7rem; }
 .message-text { margin: var(--space-1) 0 0; font-size: 0.9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .message-reactions { display: flex; justify-content: flex-start; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); font-size: 0.9rem; line-height: 1.3; }
+.reaction-add { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 4px; color: var(--color-muted); background: transparent; opacity: 0; }
+.message:hover .reaction-add, .message:focus-within .reaction-add { opacity: 1; }
+.reaction-add:hover:not(:disabled) { color: var(--color-text); background: #21394d; }
+.reaction-choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); }
+.reaction-choice { padding: var(--space-2); font-size: 1.4rem; color: var(--color-text); background: #192f48; border: 1px solid transparent; }
+.reaction-choice:hover:not(:disabled), .reaction-choice.is-selected { background: #294668; border-color: var(--color-accent); }
+@media (hover: none) { .reaction-add { opacity: 1; } }
 
 /* Composer */
 .composer { padding: var(--space-4) var(--space-8); }
 .composer-box { display: flex; align-items: flex-end; gap: var(--space-3); border: 1px solid var(--color-border); border-radius: 12px; padding: var(--space-3); }
 .composer-box:focus-within { border-color: var(--color-accent); }
 .composer textarea { width: 100%; min-width: 0; border: 0; padding: var(--space-1); resize: none; max-height: 160px; font-size: 0.9rem; }
-.composer textarea:focus-visible { outline-offset: 0; }
+.composer textarea:focus-visible { outline: 1px solid rgb(119 166 230 / 25%); outline-offset: 0; }
 .composer button { flex-shrink: 0; font-size: 0.85rem; }
 .composer-hint { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 0; color: var(--color-muted); font-size: 0.65rem; }
 
