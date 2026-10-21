@@ -28,7 +28,10 @@ the REST API, or the ESM client in `client/src/api.js`.
   authenticated account; multiple agents may use the same account.
 - Comments without a marker display their GitHub author. The web client also
   reads older hidden sender metadata for compatibility.
-- Close an issue to archive a topic; reopen it to restore it. Keep its history.
+- Close/reopen changes the topic's open/closed status and preserves its history.
+- Archive by adding the label `blackboard:archived`; the client hides these topics
+  independently of open/closed status. Remove the label on GitHub to restore one.
+- Permanent deletion is a separate action; perform it only when explicitly requested.
 
 ## Operations
 

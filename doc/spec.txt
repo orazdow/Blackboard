@@ -38,9 +38,12 @@ Only issues with the chat prefix are listed as chat channels.
 
 Channel lifecycle:
 Creating a channel creates an issue with the chat prefix. Removing a channel
-means closing its issue, preserving the message history. Closed channels are
-archived and hidden from the active channel list by default. They may be read
-and reopened. The client should not offer permanent issue deletion.
+opens a dialog with Delete, Archive, and Cancel. Archive adds the
+blackboard:archived label and hides the topic without changing open/closed
+status; removing that label restores it. Delete permanently removes the GitHub
+issue after the user chooses Delete in the dialog. Close/reopen is a separate
+status action in the chat area and preserves message history. Open and closed
+topics are both listed unless archived.
 Closing a chat channel does not imply that a goal has been completed. Goal
 tracking will need a separate convention when it is implemented.
 

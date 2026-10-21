@@ -3,6 +3,7 @@ import { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO } from './config.local.js';
 export { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO };
 
 export const CHANNEL_PREFIX = '💬 ';
+export const ARCHIVED_LABEL = 'blackboard:archived';
 export const isConfigured = Boolean(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
 
 const validSender = (sender) => typeof sender === 'string' && sender.length <= 64 && /^[a-z]/.test(sender) && !/[^a-z0-9_-]/.test(sender);
@@ -52,14 +53,14 @@ export function createGitHubClient({
   const base = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   let retryAt = 0;
 
-  async function request(path, { method = 'GET', body } = {}) {
+  async function request(path, { method = 'GET', body, graphql = false } = {}) {
     if (!token || !owner || !repo) throw new GitHubError('Fill in GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO in src/config.local.js.');
     if (Date.now() < retryAt) throw new GitHubError('GitHub rate limit reached. Waiting before another request.', { retryAt });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     const writing = method !== 'GET';
     try {
-      const response = await fetchImpl(`${base}${path}`, {
+      const response = await fetchImpl(graphql ? 'https://api.github.com/graphql' : `${base}${path}`, {
         method,
         signal: controller.signal,
         cache: 'no-store',
@@ -82,7 +83,13 @@ export function createGitHubClient({
           status: response.status, uncertain: writing && response.status >= 500, retryAt,
         });
       }
-      return response.status === 204 ? null : await response.json();
+      const result = response.status === 204 ? null : await response.json();
+      if (graphql && result.errors?.length) {
+        throw new GitHubError(result.errors.map((entry) => entry.message).join('; '), {
+          uncertain: writing && result.errors.some((entry) => entry.type === 'INTERNAL'),
+        });
+      }
+      return result;
     } catch (error) {
       if (error instanceof GitHubError) throw error;
       throw new GitHubError(writing
@@ -105,6 +112,7 @@ export function createGitHubClient({
   const channel = (issue) => ({
     id: issue.number, name: issue.title.slice(CHANNEL_PREFIX.length),
     description: issue.body || '', state: issue.state, url: issue.html_url,
+    archived: (issue.labels || []).some((label) => (typeof label === 'string' ? label : label.name) === ARCHIVED_LABEL),
   });
   const message = (comment) => ({
     id: comment.id, author: comment.user.login, ...decodeMessage(comment.body || ''),
@@ -116,9 +124,10 @@ export function createGitHubClient({
   };
 
   return {
-    async listChannels({ includeClosed = false } = {}) {
+    async listChannels({ includeClosed = false, includeArchived = false } = {}) {
       const issues = await listAll(`/issues?state=${includeClosed ? 'all' : 'open'}&sort=created&direction=asc`);
-      return issues.filter((issue) => !issue.pull_request && issue.title.startsWith(CHANNEL_PREFIX)).map(channel);
+      return issues.filter((issue) => !issue.pull_request && issue.title.startsWith(CHANNEL_PREFIX))
+        .map(channel).filter((item) => includeArchived || !item.archived);
     },
     async createChannel({ name, topic = '' }) {
       if (!name.trim()) throw new GitHubError('A topic name is required.');
@@ -129,6 +138,39 @@ export function createGitHubClient({
     },
     async reopenChannel(id) {
       return channel(await request(issuePath(id), { method: 'PATCH', body: { state: 'open' } }));
+    },
+    async archiveChannel(id) {
+      const path = issuePath(id);
+      const labelPath = `/labels/${encodeURIComponent(ARCHIVED_LABEL)}`;
+      try {
+        await request(labelPath);
+      } catch (failure) {
+        if (failure.status !== 404) throw failure;
+        try {
+          await request('/labels', { method: 'POST', body: {
+            name: ARCHIVED_LABEL, color: '52657d', description: 'Archived Blackboard topic',
+          } });
+        } catch (creationFailure) {
+          if (creationFailure.status !== 422) throw creationFailure;
+          await request(labelPath); // Another client may have created it first.
+        }
+      }
+      await request(`${path}/labels`, { method: 'POST', body: { labels: [ARCHIVED_LABEL] } });
+      return { id, archived: true };
+    },
+    async deleteChannel(id) {
+      const issue = await request(issuePath(id));
+      if (issue.pull_request || !issue.title.startsWith(CHANNEL_PREFIX) || !issue.node_id) {
+        throw new GitHubError('Only Blackboard topic issues can be deleted.');
+      }
+      const result = await request('', { graphql: true, method: 'POST', body: {
+        query: 'mutation DeleteTopic($id: ID!) { deleteIssue(input: {issueId: $id}) { repository { id } } }',
+        variables: { id: issue.node_id },
+      } });
+      if (!result.data?.deleteIssue?.repository) {
+        throw new GitHubError('Deletion unconfirmed. Check GitHub before trying again.', { uncertain: true });
+      }
+      return { id, deleted: true };
     },
     // Initial implementation returns a complete paginated snapshot. Polling
     // replaces the snapshot; comment IDs prevent duplicates. Cursor reads follow.

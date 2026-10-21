@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createGitHubClient, GitHubError } from '../src/api.js';
 
 const issue = (number, extra = {}) => ({
-  number, title: `💬 channel-${number}`, body: 'Topic description',
+  number, node_id: `I_${number}`, title: `💬 channel-${number}`, body: 'Topic description',
   state: 'open', html_url: `https://github.com/example/chat/issues/${number}`, ...extra,
 });
 const comment = (id) => ({ id, user: { login: 'agent' }, body: 'Hello', created_at: '2026-10-20T19:00:00Z', html_url: 'https://github.com/example/chat' });
@@ -75,6 +75,23 @@ test('creates prefixed channels, posts comments, and closes without deleting', a
   assert.equal(calls[2].body.state_reason, 'not_planned');
 });
 
+test('includes archived topics on request and reopens an issue', async () => {
+  const calls = [];
+  const api = client(async (url, options) => {
+    calls.push({ url, ...options });
+    return Response.json(options.method === 'PATCH'
+      ? issue(3, { state: 'open' })
+      : [issue(3, { state: 'closed' })]);
+  });
+  const channels = await api.listChannels({ includeClosed: true });
+  assert.match(calls[0].url, /state=all/);
+  assert.equal(channels[0].state, 'closed');
+  const reopened = await api.reopenChannel(3);
+  assert.equal(calls[1].method, 'PATCH');
+  assert.deepEqual(JSON.parse(calls[1].body), { state: 'open' });
+  assert.equal(reopened.state, 'open');
+});
+
 test('message snapshots include every page', async () => {
   let calls = 0;
   const api = client(async () => Response.json(++calls === 1
@@ -82,6 +99,82 @@ test('message snapshots include every page', async () => {
   const messages = await api.readMessages(2);
   assert.equal(messages.length, 101);
   assert.equal(messages[100].id, 101);
+});
+
+test('archived topics are hidden by default independently of open/closed state', async () => {
+  const api = client(async () => Response.json([
+    issue(1), issue(2, { labels: [{ name: 'blackboard:archived' }] }),
+    issue(3, { state: 'closed', labels: ['blackboard:archived'] }),
+  ]));
+  assert.deepEqual((await api.listChannels({ includeClosed: true })).map((item) => item.id), [1]);
+  const all = await api.listChannels({ includeClosed: true, includeArchived: true });
+  assert.equal(all.length, 3);
+  assert.equal(all[1].archived, true);
+  assert.equal(all[1].state, 'open');
+});
+
+test('archiving adds a label without replacing existing labels or closing the issue', async () => {
+  const calls = [];
+  const api = client(async (url, options) => {
+    calls.push({ url, ...options });
+    return Response.json(options.method === 'GET' ? { name: 'blackboard:archived' } : [{ name: 'blackboard:archived' }]);
+  });
+  assert.deepEqual(await api.archiveChannel(3), { id: 3, archived: true });
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].url, /\/issues\/3\/labels$/);
+  assert.equal(calls[1].method, 'POST');
+  assert.deepEqual(JSON.parse(calls[1].body), { labels: ['blackboard:archived'] });
+});
+
+test('archiving creates the repository label if missing', async () => {
+  const calls = [];
+  const api = client(async (url, options) => {
+    calls.push({ url, ...options });
+    if (calls.length === 1) return Response.json({ message: 'Not Found' }, { status: 404 });
+    return Response.json({ name: 'blackboard:archived' });
+  });
+  await api.archiveChannel(3);
+  assert.equal(calls.length, 3);
+  assert.match(calls[1].url, /\/labels$/);
+  assert.equal(JSON.parse(calls[1].body).name, 'blackboard:archived');
+  assert.match(calls[2].url, /\/issues\/3\/labels$/);
+});
+
+test('deletion uses the issue node ID and a GraphQL mutation, never close', async () => {
+  const calls = [];
+  const api = client(async (url, options) => {
+    calls.push({ url, ...options });
+    return Response.json(calls.length === 1 ? issue(3) : { data: { deleteIssue: { repository: { id: 'R_1' } } } });
+  });
+  assert.deepEqual(await api.deleteChannel(3), { id: 3, deleted: true });
+  assert.equal(calls[1].url, 'https://api.github.com/graphql');
+  assert.equal(calls[1].method, 'POST');
+  const body = JSON.parse(calls[1].body);
+  assert.equal(body.variables.id, 'I_3');
+  assert.match(body.query, /deleteIssue/);
+});
+
+test('GraphQL deletion errors do not report success', async () => {
+  let calls = 0;
+  const api = client(async () => Response.json(++calls === 1 ? issue(3) : {
+    errors: [{ type: 'FORBIDDEN', message: 'Insufficient permissions' }], data: { deleteIssue: null },
+  }));
+  await assert.rejects(api.deleteChannel(3), /Insufficient permissions/);
+  assert.equal(calls, 2);
+});
+
+test('deletion refuses non-topics and never retries an uncertain mutation', async () => {
+  let calls = 0;
+  const unrelated = client(async () => { calls++; return Response.json(issue(3, { title: 'Other issue' })); });
+  await assert.rejects(unrelated.deleteChannel(3), /Only Blackboard/);
+  assert.equal(calls, 1);
+  calls = 0;
+  const timeout = client(async () => {
+    if (++calls === 1) return Response.json(issue(3));
+    throw new TypeError('Network error');
+  });
+  await assert.rejects(timeout.deleteChannel(3), (failure) => failure.uncertain);
+  assert.equal(calls, 2);
 });
 
 test('network write failures are uncertain and never automatically retried', async () => {
