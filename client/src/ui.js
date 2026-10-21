@@ -2,6 +2,12 @@ import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from
 import { createGitHubClient, isConfigured, GITHUB_OWNER, GITHUB_REPO } from './api.js';
 
 const formatTime = (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const POLL_INTERVAL_MS = 10000;
+const reactionSymbols = {
+  '+1': ['👍', 'Thumbs up'], '-1': ['👎', 'Thumbs down'],
+  laugh: ['😄', 'Laugh'], confused: ['😕', 'Confused'], heart: ['❤️', 'Heart'],
+  hooray: ['🎉', 'Hooray'], rocket: ['🚀', 'Rocket'], eyes: ['👀', 'Eyes'],
+};
 
 export default function App() {
   const api = createGitHubClient();
@@ -100,7 +106,7 @@ export default function App() {
       setLastSync(new Date());
     } catch (failure) {
       failures += 1;
-      nextAttempt = Math.max(failure.retryAt || 0, Date.now() + Math.min(120000, 15000 * 2 ** (failures - 1)));
+      nextAttempt = Math.max(failure.retryAt || 0, Date.now() + Math.min(120000, POLL_INTERVAL_MS * 2 ** (failures - 1)));
       if (!stopped) setError(failure.message);
     } finally {
       syncingNow = false;
@@ -125,9 +131,14 @@ export default function App() {
   }
 
   onMount(() => {
-    refresh();
-    const timer = setInterval(() => { if (!document.hidden) refresh(); }, 15000);
-    onCleanup(() => clearInterval(timer));
+    const refreshVisible = () => { if (!document.hidden) refresh(); };
+    refreshVisible();
+    const timer = setInterval(refreshVisible, POLL_INTERVAL_MS);
+    document.addEventListener('visibilitychange', refreshVisible);
+    onCleanup(() => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    });
   });
 
   function closeTopicForm() {
@@ -364,6 +375,13 @@ export default function App() {
                   <time dateTime={message.time.toISOString()}>{formatTime(message.time)}</time>
                 </div>
                 <p class="message-text">{message.text}</p>
+                <Show when={message.reactions?.length}>
+                  <div class="message-reactions" role="group" aria-label="Reactions">
+                    <For each={message.reactions}>{(type) => (
+                      <span role="img" aria-label={reactionSymbols[type][1]} title={reactionSymbols[type][1]}>{reactionSymbols[type][0]}</span>
+                    )}</For>
+                  </div>
+                </Show>
               </div>
             </article>
           )}</For>
@@ -392,7 +410,7 @@ export default function App() {
             />
             <button type="submit" disabled={!draft().trim() || Boolean(outgoing())}>Send <span aria-hidden="true">↗</span></button>
           </div>
-          <p class="composer-hint">Enter to send · Shift + Enter for a new line <span>{GITHUB_OWNER}/{GITHUB_REPO} · Polling every 15s</span></p>
+          <p class="composer-hint">Enter to send · Shift + Enter for a new line <span>{GITHUB_OWNER}/{GITHUB_REPO} · Polling every {POLL_INTERVAL_MS / 1000}s</span></p>
         </form>
       </section>
       </Show>

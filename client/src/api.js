@@ -4,6 +4,7 @@ export { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO };
 
 export const CHANNEL_PREFIX = '💬 ';
 export const ARCHIVED_LABEL = 'blackboard:archived';
+const REACTION_TYPES = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
 export const isConfigured = Boolean(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
 
 const validSender = (sender) => typeof sender === 'string' && sender.length <= 64 && /^[a-z]/.test(sender) && !/[^a-z0-9_-]/.test(sender);
@@ -48,17 +49,51 @@ export class GitHubError extends Error {
 // No browser/UI dependencies; fetch can be supplied by scripts or tests.
 export function createGitHubClient({
   token = GITHUB_TOKEN, owner = GITHUB_OWNER, repo = GITHUB_REPO,
-  fetch: fetchImpl = globalThis.fetch, timeout = 20000,
+  fetch: fetchImpl = globalThis.fetch, timeout = 20000, minWriteInterval = 1000,
 } = {}) {
   const base = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   let retryAt = 0;
+  const cache = new Map();
+  const inFlight = new Map();
+  let queue = Promise.resolve();
+  let lastWriteAt = 0;
 
-  async function request(path, { method = 'GET', body, graphql = false } = {}) {
+  function request(path, options = {}) {
+    const reading = !options.method || options.method === 'GET';
+    if (reading && inFlight.has(path)) return inFlight.get(path);
+    const result = queue.then(() => performRequest(path, options));
+    queue = result.catch(() => {});
+    if (reading) {
+      inFlight.set(path, result);
+      result.finally(() => inFlight.delete(path)).catch(() => {});
+    }
+    return result;
+  }
+
+  function nextPage(link) {
+    const next = /<([^>]+)>;\s*rel="next"/.exec(link || '');
+    if (!next) return null;
+    const url = new URL(next[1]);
+    if (url.origin !== 'https://api.github.com' || !url.pathname.toLowerCase().startsWith(new URL(base).pathname.toLowerCase() + '/')) {
+      throw new GitHubError('GitHub returned an unexpected pagination URL.');
+    }
+    return url.href.slice(base.length);
+  }
+
+  async function performRequest(path, { method = 'GET', body, graphql = false } = {}) {
     if (!token || !owner || !repo) throw new GitHubError('Fill in GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO in src/config.local.js.');
     if (Date.now() < retryAt) throw new GitHubError('GitHub rate limit reached. Waiting before another request.', { retryAt });
+    const writing = method !== 'GET';
+    const cached = writing ? null : cache.get(path);
+    if (cached && Date.now() < cached.pollAfter) return cached.data;
+    if (writing) {
+      const wait = Math.max(0, lastWriteAt + minWriteInterval - Date.now());
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+      lastWriteAt = Date.now();
+      cache.clear();
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
-    const writing = method !== 'GET';
     try {
       const response = await fetchImpl(graphql ? 'https://api.github.com/graphql' : `${base}${path}`, {
         method,
@@ -68,16 +103,28 @@ export function createGitHubClient({
           Accept: 'application/vnd.github+json',
           Authorization: `Bearer ${token}`,
           'X-GitHub-Api-Version': '2026-03-10',
+          ...(cached?.etag ? { 'If-None-Match': cached.etag }
+            : cached?.lastModified ? { 'If-Modified-Since': cached.lastModified } : {}),
           ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
+      const pollInterval = response.headers.has('x-poll-interval')
+        ? Number(response.headers.get('x-poll-interval') || 0) * 1000 : cached?.pollInterval || 0;
+      const pollAfter = Date.now() + Math.max(0, pollInterval);
+      if (response.status === 304 && cached) {
+        cache.set(path, { ...cached, pollAfter, pollInterval });
+        return cached.data;
+      }
       if (!response.ok) {
         const details = await response.json().catch(() => ({}));
-        if (response.status === 429 || (response.status === 403 && (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after')))) {
+        if (response.status === 429 || (response.status === 403 && (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after') || /rate limit/i.test(details.message || '')))) {
+          const retryAfter = response.headers.get('retry-after');
+          const retryDeadline = Number.isFinite(Number(retryAfter))
+            ? Date.now() + Number(retryAfter) * 1000 : Date.parse(retryAfter) || 0;
           retryAt = Math.max(Date.now() + 60000,
             Number(response.headers.get('x-ratelimit-reset') || 0) * 1000,
-            Date.now() + Number(response.headers.get('retry-after') || 0) * 1000);
+            retryDeadline);
         }
         throw new GitHubError(`GitHub ${response.status}: ${details.message || response.statusText}`, {
           status: response.status, uncertain: writing && response.status >= 500, retryAt,
@@ -89,6 +136,11 @@ export function createGitHubClient({
           uncertain: writing && result.errors.some((entry) => entry.type === 'INTERNAL'),
         });
       }
+      if (!writing) cache.set(path, {
+        data: result, etag: response.headers.get('etag'),
+        lastModified: response.headers.get('last-modified'),
+        next: nextPage(response.headers.get('link')), pollAfter, pollInterval,
+      });
       return result;
     } catch (error) {
       if (error instanceof GitHubError) throw error;
@@ -102,11 +154,17 @@ export function createGitHubClient({
 
   async function listAll(path) {
     const results = [];
-    for (let page = 1; ; page += 1) {
-      const items = await request(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
+    const visited = new Set();
+    let next = `${path}${path.includes('?') ? '&' : '?'}per_page=100&page=1`;
+    while (next) {
+      const current = next;
+      if (visited.has(current)) throw new GitHubError('GitHub returned a repeated pagination link.');
+      visited.add(current);
+      const items = await request(current);
       results.push(...items);
-      if (items.length < 100) return results;
+      next = cache.get(current)?.next || null;
     }
+    return results;
   }
 
   const channel = (issue) => ({
@@ -117,6 +175,7 @@ export function createGitHubClient({
   const message = (comment) => ({
     id: comment.id, author: comment.user.login, ...decodeMessage(comment.body || ''),
     time: new Date(comment.created_at), url: comment.html_url,
+    reactions: REACTION_TYPES.filter((type) => comment.reactions?.[type] > 0),
   });
   const issuePath = (id) => {
     if (!Number.isSafeInteger(id) || id < 1) throw new GitHubError('Invalid channel ID.');

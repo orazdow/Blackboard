@@ -8,7 +8,7 @@ const issue = (number, extra = {}) => ({
   state: 'open', html_url: `https://github.com/example/chat/issues/${number}`, ...extra,
 });
 const comment = (id) => ({ id, user: { login: 'agent' }, body: 'Hello', created_at: '2026-10-20T19:00:00Z', html_url: 'https://github.com/example/chat' });
-const client = (fetch, extra = {}) => createGitHubClient({ token: 'test-token', owner: 'example', repo: 'chat', fetch, ...extra });
+const client = (fetch, extra = {}) => createGitHubClient({ token: 'test-token', owner: 'example', repo: 'chat', fetch, minWriteInterval: 0, ...extra });
 
 test('sender metadata round trips without changing the GitHub author', async () => {
   const api = client(async (url, options) => {
@@ -47,7 +47,9 @@ test('lists all pages and excludes unrelated issues and pull requests', async ()
     assert.equal(options.headers.Authorization, 'Bearer test-token');
     return Response.json(calls.length === 1
       ? Array.from({ length: 100 }, (_, i) => issue(i + 1))
-      : [issue(101), issue(102, { title: 'Other issue' }), issue(103, { pull_request: {} })]);
+      : [issue(101), issue(102, { title: 'Other issue' }), issue(103, { pull_request: {} })], {
+        headers: calls.length === 1 ? { link: '<https://api.github.com/repos/example/chat/issues?state=open&per_page=100&page=2>; rel="next"' } : {},
+      });
   });
   const channels = await api.listChannels();
   assert.equal(channels.length, 101);
@@ -95,10 +97,31 @@ test('includes archived topics on request and reopens an issue', async () => {
 test('message snapshots include every page', async () => {
   let calls = 0;
   const api = client(async () => Response.json(++calls === 1
-    ? Array.from({ length: 100 }, (_, i) => comment(i + 1)) : [comment(101)]));
+    ? Array.from({ length: 100 }, (_, i) => comment(i + 1)) : [comment(101)], {
+      headers: calls === 1 ? { link: '<https://api.github.com/repos/example/chat/issues/2/comments?per_page=100&page=2>; rel="next"' } : {},
+    }));
   const messages = await api.readMessages(2);
   assert.equal(messages.length, 101);
   assert.equal(messages[100].id, 101);
+});
+
+test('messages expose each present reaction once, without counts', async () => {
+  const api = client(async () => Response.json([
+    { ...comment(1), reactions: { '+1': 5, '-1': 0, laugh: 2, confused: 0, heart: 1, hooray: 0, rocket: 3, eyes: 0, total_count: 11 } },
+    comment(2),
+  ]));
+  const messages = await api.readMessages(1);
+  assert.deepEqual(messages[0].reactions, ['+1', 'laugh', 'heart', 'rocket']);
+  assert.deepEqual(messages[1].reactions, []);
+});
+
+test('polling reflects added and removed reactions on an existing comment', async () => {
+  let calls = 0;
+  const api = client(async () => Response.json([
+    { ...comment(1), reactions: ++calls === 1 ? { heart: 2 } : { heart: 0, eyes: 1 } },
+  ]));
+  assert.deepEqual((await api.readMessages(1))[0].reactions, ['heart']);
+  assert.deepEqual((await api.readMessages(1))[0].reactions, ['eyes']);
 });
 
 test('archived topics are hidden by default independently of open/closed state', async () => {
@@ -209,4 +232,101 @@ test('missing credentials and invalid channel IDs fail before fetching', async (
   const fetch = async () => assert.fail('Unexpected network call');
   await assert.rejects(client(fetch, { token: '' }).listChannels(), /Fill in/);
   await assert.rejects(client(fetch).sendMessage(-1, 'Hello'), /Invalid channel ID/);
+});
+
+test('conditional polling sends ETags and reuses data after 304', async () => {
+  let calls = 0;
+  const api = client(async (url, options) => {
+    if (++calls === 1) return Response.json([comment(1)], { headers: { etag: '"v1"' } });
+    assert.equal(options.headers['If-None-Match'], '"v1"');
+    return new Response(null, { status: 304 });
+  });
+  const first = await api.readMessages(1);
+  assert.deepEqual(await api.readMessages(1), first);
+  assert.equal(calls, 2);
+});
+
+test('uses Last-Modified when no ETag is supplied', async () => {
+  let calls = 0;
+  const modified = 'Wed, 21 Oct 2026 01:00:00 GMT';
+  const api = client(async (url, options) => {
+    if (++calls === 1) return Response.json([], { headers: { 'last-modified': modified } });
+    assert.equal(options.headers['If-Modified-Since'], modified);
+    return new Response(null, { status: 304 });
+  });
+  await api.readMessages(1);
+  assert.deepEqual(await api.readMessages(1), []);
+});
+
+test('unchanged pages retain pagination links across 304 responses', async () => {
+  let calls = 0;
+  const api = client(async (url) => {
+    calls++;
+    if (calls > 2) return new Response(null, { status: 304 });
+    const firstPage = new URL(url).searchParams.get('page') === '1';
+    return Response.json([comment(firstPage ? 1 : 2)], { headers: {
+      etag: firstPage ? '"p1"' : '"p2"',
+      ...(firstPage ? { link: '<https://api.github.com/repos/example/chat/issues/1/comments?per_page=100&page=2>; rel="next"' } : {}),
+    } });
+  });
+  assert.deepEqual((await api.readMessages(1)).map((item) => item.id), [1, 2]);
+  assert.deepEqual((await api.readMessages(1)).map((item) => item.id), [1, 2]);
+  assert.equal(calls, 4);
+});
+
+test('honors x-poll-interval and invalidates cached reads after writes', async () => {
+  const calls = [];
+  const api = client(async (url, options) => {
+    calls.push(options);
+    if (options.method === 'POST') return Response.json(comment(2));
+    return Response.json([comment(calls.length === 1 ? 1 : 2)], { headers: { etag: '"v1"', 'x-poll-interval': '60' } });
+  });
+  await api.readMessages(1);
+  await api.readMessages(1);
+  assert.equal(calls.length, 1);
+  await api.sendMessage(1, 'Hello');
+  const latest = await api.readMessages(1);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].headers['If-None-Match'], undefined);
+  assert.equal(latest[0].id, 2);
+});
+
+test('coalesces concurrent identical reads and serializes other requests', async () => {
+  let active = 0;
+  let calls = 0;
+  const api = client(async () => {
+    calls++;
+    assert.equal(++active, 1);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    active--;
+    return Response.json([]);
+  });
+  await Promise.all([api.readMessages(1), api.readMessages(1), api.readMessages(2)]);
+  assert.equal(calls, 2);
+});
+
+test('pagination accepts repository name casing but rejects external URLs', async () => {
+  let calls = 0;
+  const api = client(async () => Response.json([comment(++calls)], { headers: calls === 1
+    ? { link: '<https://api.github.com/repos/Example/Chat/issues/1/comments?per_page=100&page=2>; rel="next"' } : {},
+  }));
+  assert.equal((await api.readMessages(1)).length, 2);
+  let externalCalls = 0;
+  const external = client(async () => {
+    externalCalls++;
+    return Response.json([], { headers: { link: '<https://example.com/comments>; rel="next"' } });
+  });
+  await assert.rejects(external.readMessages(1), /unexpected pagination URL/);
+  assert.equal(externalCalls, 1);
+});
+
+test('stops on secondary rate-limit responses without retrying', async () => {
+  let calls = 0;
+  const api = client(async () => {
+    calls++;
+    return Response.json({ message: 'You have exceeded a secondary rate limit.' }, { status: 403 });
+  });
+  await assert.rejects(api.listChannels(), (failure) => failure.retryAt > Date.now());
+  await assert.rejects(api.listChannels(), /Waiting/);
+  assert.equal(calls, 1);
 });
