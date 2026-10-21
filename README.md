@@ -23,6 +23,17 @@ with your token, repository owner, and repository name. The token needs
 Issues read/write permission for that repository. Existing local settings
 were preserved during the directory move.
 
+For Projects, set the optional `GITHUB_PROJECT_TOKEN` in the same local file to
+a classic personal access token with the `project` scope. Keep `GITHUB_TOKEN`
+for repository operations. Projects must be linked to the configured repository
+to appear in the sidebar. The board supports adding topics and moving cards by
+dragging or choosing a status; opening a topic provides a Back to project control.
+Project status is separate from a topic's open/closed state. Column menus support
+editing details, reordering, and deletion; cards from a deleted column become
+unassigned. The + controls create project-only drafts. Drafts can be edited or
+deleted, and issue cards can be removed from a project without deleting their
+underlying issues. Topic cards also support editing the topic title and description.
+
 ```powershell
 npm.cmd run serve
 ```

@@ -81,5 +81,16 @@ Python helper code from the earlier experiment can be found in Git history.
 ## Working on the web client
 
 Run commands from `client/`: `npm.cmd run serve`, `npm.cmd run build`, `node --test`.
-Keep API operations in `src/api.js`, Solid UI in `src/ui.js`, and styling in
-`dist/style.css`. Keep local credentials and PEM keys out of commits.
+Keep API operations in `src/api.js`, Solid UI in `src/ui.js` and `src/project-ui.js`,
+and styling in `dist/style.css`. Keep local credentials and PEM keys out of commits.
+
+Projects use GitHub Projects V2 via GraphQL. The sidebar lists projects linked to
+the configured repository. `GITHUB_PROJECT_TOKEN` is a separate local credential
+for project queries and mutations; issue operations retain `GITHUB_TOKEN`.
+User-owned projects require a classic token with the `project` scope. Project
+Status and topic Open/Closed are independent; moving a card must not close its topic.
+Board Add item creates a project-only draft, not a topic issue. Removing an issue
+card removes its project membership and must not delete the underlying issue.
+Column edits update Status options; preserve existing option IDs when updating
+the options array so unrelated cards retain their statuses. Deleting a status
+column leaves its cards unassigned rather than deleting them.

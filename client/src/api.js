@@ -1,4 +1,5 @@
 import { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO } from './config.local.js';
+import * as localConfig from './config.local.js';
 
 export { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO };
 
@@ -6,6 +7,7 @@ export const CHANNEL_PREFIX = '💬 ';
 export const ARCHIVED_LABEL = 'blackboard:archived';
 const REACTION_TYPES = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
 export const isConfigured = Boolean(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
+export const isProjectConfigured = Boolean(localConfig.GITHUB_PROJECT_TOKEN);
 
 const validSender = (sender) => typeof sender === 'string' && sender.length <= 64 && /^[a-z]/.test(sender) && !/[^a-z0-9_-]/.test(sender);
 
@@ -49,6 +51,7 @@ export class GitHubError extends Error {
 // No browser/UI dependencies; fetch can be supplied by scripts or tests.
 export function createGitHubClient({
   token = GITHUB_TOKEN, owner = GITHUB_OWNER, repo = GITHUB_REPO,
+  projectToken = localConfig.GITHUB_PROJECT_TOKEN || token,
   fetch: fetchImpl = globalThis.fetch, timeout = 20000, minWriteInterval = 1000,
 } = {}) {
   const base = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
@@ -60,13 +63,14 @@ export function createGitHubClient({
   let viewerPromise;
 
   function request(path, options = {}) {
-    const reading = !options.method || options.method === 'GET';
-    if (reading && inFlight.has(path)) return inFlight.get(path);
-    const result = queue.then(() => performRequest(path, options));
+    const reading = options.graphqlRead || !options.method || options.method === 'GET';
+    const key = options.graphqlRead ? `graphql:${JSON.stringify(options.body)}` : path;
+    if (reading && inFlight.has(key)) return inFlight.get(key);
+    const result = queue.then(() => performRequest(path, { ...options, cacheKey: key }));
     queue = result.catch(() => {});
     if (reading) {
-      inFlight.set(path, result);
-      result.finally(() => inFlight.delete(path)).catch(() => {});
+      inFlight.set(key, result);
+      result.finally(() => inFlight.delete(key)).catch(() => {});
     }
     return result;
   }
@@ -81,11 +85,11 @@ export function createGitHubClient({
     return url.href.slice(base.length);
   }
 
-  async function performRequest(path, { method = 'GET', body, graphql = false, apiRoot = false } = {}) {
-    if (!token || !owner || !repo) throw new GitHubError('Fill in GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO in src/config.local.js.');
+  async function performRequest(path, { method = 'GET', body, graphql = false, graphqlRead = false, apiRoot = false, cacheKey = path, authToken = token } = {}) {
+    if (!authToken || !owner || !repo) throw new GitHubError('Fill in the token, owner, and repository in src/config.local.js.');
     if (Date.now() < retryAt) throw new GitHubError('GitHub rate limit reached. Waiting before another request.', { retryAt });
-    const writing = method !== 'GET';
-    const cached = writing ? null : cache.get(path);
+    const writing = method !== 'GET' && !graphqlRead;
+    const cached = writing ? null : cache.get(cacheKey);
     if (cached && Date.now() < cached.pollAfter) return cached.data;
     if (writing) {
       const wait = Math.max(0, lastWriteAt + minWriteInterval - Date.now());
@@ -102,7 +106,7 @@ export function createGitHubClient({
         cache: 'no-store',
         headers: {
           Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${authToken}`,
           'X-GitHub-Api-Version': '2026-03-10',
           ...(cached?.etag ? { 'If-None-Match': cached.etag }
             : cached?.lastModified ? { 'If-Modified-Since': cached.lastModified } : {}),
@@ -114,7 +118,7 @@ export function createGitHubClient({
         ? Number(response.headers.get('x-poll-interval') || 0) * 1000 : cached?.pollInterval || 0;
       const pollAfter = Date.now() + Math.max(0, pollInterval);
       if (response.status === 304 && cached) {
-        cache.set(path, { ...cached, pollAfter, pollInterval });
+        cache.set(cacheKey, { ...cached, pollAfter, pollInterval });
         return cached.data;
       }
       if (!response.ok) {
@@ -133,11 +137,13 @@ export function createGitHubClient({
       }
       const result = response.status === 204 ? null : await response.json();
       if (graphql && result.errors?.length) {
+        if (result.errors.some((entry) => entry.type === 'RATE_LIMITED' || /rate limit/i.test(entry.message))) retryAt = Date.now() + 60000;
         throw new GitHubError(result.errors.map((entry) => entry.message).join('; '), {
+          status: result.errors.some((entry) => entry.type === 'FORBIDDEN') ? 403 : 0, retryAt,
           uncertain: writing && result.errors.some((entry) => entry.type === 'INTERNAL'),
         });
       }
-      if (!writing) cache.set(path, {
+      if (!writing) cache.set(cacheKey, {
         data: result, etag: response.headers.get('etag'),
         lastModified: response.headers.get('last-modified'),
         next: nextPage(response.headers.get('link')), pollAfter, pollInterval,
@@ -166,6 +172,21 @@ export function createGitHubClient({
       next = cache.get(current)?.next || null;
     }
     return results;
+  }
+
+  async function projectQuery(query, variables, mutation = false) {
+    return request('', { method: 'POST', graphql: true, graphqlRead: !mutation, authToken: projectToken, body: { query, variables } });
+  }
+  function nodeId(id) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_=-]{1,256}$/.test(id)) throw new GitHubError('Invalid project identifier.');
+    return id;
+  }
+  function nextCursor(connection, visited) {
+    if (!connection.pageInfo?.hasNextPage) return null;
+    const cursor = connection.pageInfo.endCursor;
+    if (!cursor || visited.has(cursor)) throw new GitHubError('GitHub returned a repeated project pagination cursor.');
+    visited.add(cursor);
+    return cursor;
   }
 
   const tag = (label) => ({
@@ -245,6 +266,188 @@ export function createGitHubClient({
   }
 
   const api = {
+    async listProjects() {
+      const projects = [];
+      const visited = new Set();
+      let after = null;
+      do {
+        const result = await projectQuery(`query BlackboardProjects($owner:String!,$repo:String!,$after:String) {
+          repository(owner:$owner,name:$repo) { projectsV2(first:100,after:$after) {
+            nodes { id number title url closed shortDescription viewerCanUpdate }
+            pageInfo { hasNextPage endCursor }
+          } }
+        }`, { owner, repo, after });
+        const connection = result.data?.repository?.projectsV2;
+        if (!connection) throw new GitHubError('Could not read projects linked to this repository.');
+        projects.push(...connection.nodes.filter(Boolean).map((item) => ({
+          id: item.id, number: item.number, name: item.title, url: item.url,
+          closed: item.closed, description: item.shortDescription || '', canUpdate: item.viewerCanUpdate,
+        })));
+        after = nextCursor(connection, visited);
+      } while (after);
+      return projects.sort((a, b) => Number(a.closed) - Number(b.closed) || a.number - b.number);
+    },
+    async readProject(id) {
+      nodeId(id);
+      const fields = [];
+      let project;
+      let after = null;
+      const fieldCursors = new Set();
+      do {
+        const result = await projectQuery(`query BlackboardProjectFields($id:ID!,$after:String) {
+          node(id:$id) { ... on ProjectV2 {
+            id number title url closed shortDescription viewerCanUpdate
+            fields(first:100,after:$after) {
+              nodes { __typename ... on ProjectV2SingleSelectField { id name options { id name color description } } }
+              pageInfo { hasNextPage endCursor }
+            }
+          } }
+        }`, { id, after });
+        project = result.data?.node;
+        if (!project?.fields) throw new GitHubError('Project is unavailable or the token cannot access it.');
+        fields.push(...project.fields.nodes.filter((field) => field?.__typename === 'ProjectV2SingleSelectField'));
+        after = nextCursor(project.fields, fieldCursors);
+      } while (after);
+      const statusField = fields.find((field) => field.name.toLowerCase() === 'status') || null;
+      const items = [];
+      const itemCursors = new Set();
+      do {
+        const result = await projectQuery(`query BlackboardProjectItems($id:ID!,$after:String,$statusName:String!) {
+          node(id:$id) { ... on ProjectV2 { items(first:100,after:$after) {
+            nodes { id isArchived
+              fieldValueByName(name:$statusName) { ... on ProjectV2ItemFieldSingleSelectValue { optionId name } }
+              content { __typename
+                ... on Issue { id number title body url state repository { nameWithOwner } }
+                ... on PullRequest { id number title url state repository { nameWithOwner } }
+                ... on DraftIssue { id title body }
+              }
+            }
+            pageInfo { hasNextPage endCursor }
+          } } }
+        }`, { id, after, statusName: statusField?.name || 'Status' });
+        const connection = result.data?.node?.items;
+        if (!connection) throw new GitHubError('Could not read project items.');
+        for (const item of connection.nodes.filter((item) => item && !item.isArchived)) {
+          const content = item.content;
+          const localTopic = content?.__typename === 'Issue' && content.repository?.nameWithOwner.toLowerCase() === `${owner}/${repo}`.toLowerCase() && content.title.startsWith(CHANNEL_PREFIX);
+          items.push({
+            id: item.id, contentId: content?.id, title: localTopic ? content.title.slice(CHANNEL_PREFIX.length) : content?.title || 'Unavailable item',
+            type: content?.__typename || 'Unavailable', url: content?.url || null,
+            body: content?.body || '',
+            number: content?.number ?? null, repository: content?.repository?.nameWithOwner || null,
+            state: content?.state || null, channelId: localTopic ? content.number : null,
+            statusId: item.fieldValueByName?.optionId ?? null,
+          });
+        }
+        after = nextCursor(connection, itemCursors);
+      } while (after);
+      return {
+        id: project.id, number: project.number, name: project.title, url: project.url,
+        closed: project.closed, description: project.shortDescription || '', canUpdate: project.viewerCanUpdate,
+        statusField, items,
+      };
+    },
+    async setProjectItemStatus(projectId, itemId, fieldId, optionId) {
+      [projectId, itemId, fieldId].forEach(nodeId);
+      if (optionId !== null) nodeId(optionId);
+      const clearing = optionId === null;
+      const mutation = clearing ? 'clearProjectV2ItemFieldValue' : 'updateProjectV2ItemFieldValue';
+      const result = await projectQuery(clearing
+        ? `mutation BlackboardClearStatus($project:ID!,$item:ID!,$field:ID!) { clearProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field}) { projectV2Item { id } } }`
+        : `mutation BlackboardSetStatus($project:ID!,$item:ID!,$field:ID!,$option:String!) { updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}) { projectV2Item { id } } }`,
+      { project: projectId, item: itemId, field: fieldId, ...(clearing ? {} : { option: optionId }) }, true);
+      if (!result.data?.[mutation]?.projectV2Item?.id) throw new GitHubError('Project update unconfirmed. Refresh the board before trying again.', { uncertain: true });
+      return { id: itemId, statusId: optionId };
+    },
+    async addTopicToProject(projectId, channelId) {
+      nodeId(projectId);
+      const issue = await request(issuePath(channelId));
+      if (!isTopic(issue) || !issue.node_id) throw new GitHubError('Only Blackboard topics can be added from this client.');
+      const result = await projectQuery(`mutation BlackboardAddTopic($project:ID!,$content:ID!) { addProjectV2ItemById(input:{projectId:$project,contentId:$content}) { item { id } } }`, { project: projectId, content: issue.node_id }, true);
+      const id = result.data?.addProjectV2ItemById?.item?.id;
+      if (!id) throw new GitHubError('Project addition unconfirmed. Refresh the board before trying again.', { uncertain: true });
+      return { id, channelId, contentId: issue.node_id, title: issue.title.slice(CHANNEL_PREFIX.length), type: 'Issue', number: channelId, url: issue.html_url, repository: `${owner}/${repo}`, state: issue.state.toUpperCase(), statusId: null };
+    },
+    async createProjectDraft(projectId, { title, body = '', fieldId = null, statusId = null }) {
+      nodeId(projectId);
+      if (typeof title !== 'string' || !title.trim()) throw new GitHubError('An item title is required.');
+      if (statusId !== null) { nodeId(fieldId); nodeId(statusId); }
+      const result = await projectQuery(`mutation BlackboardCreateDraft($project:ID!,$title:String!,$body:String!) {
+        addProjectV2DraftIssue(input:{projectId:$project,title:$title,body:$body}) {
+          projectItem { id content { ... on DraftIssue { id title body } } }
+        }
+      }`, { project: projectId, title: title.trim(), body }, true);
+      const created = result.data?.addProjectV2DraftIssue?.projectItem;
+      if (!created?.id || !created.content?.id) throw new GitHubError('Draft creation unconfirmed. Refresh the board before trying again.', { uncertain: true });
+      const item = { id: created.id, contentId: created.content.id, title: created.content.title, body: created.content.body || '', type: 'DraftIssue', channelId: null, statusId: null, url: null, repository: null, state: null, number: null };
+      if (statusId !== null) {
+        try { await api.setProjectItemStatus(projectId, item.id, fieldId, statusId); }
+        catch (failure) {
+          const error = new GitHubError(`The draft was created, but its column could not be confirmed. ${failure.message}`, { uncertain: failure.uncertain, retryAt: failure.retryAt });
+          error.createdItem = item;
+          throw error;
+        }
+      }
+      return { ...item, statusId };
+    },
+    async updateProjectDraft(draftId, { title, body = '' }) {
+      nodeId(draftId);
+      if (typeof title !== 'string' || !title.trim()) throw new GitHubError('An item title is required.');
+      const result = await projectQuery(`mutation BlackboardEditDraft($id:ID!,$title:String!,$body:String!) {
+        updateProjectV2DraftIssue(input:{draftIssueId:$id,title:$title,body:$body}) { draftIssue { id title body } }
+      }`, { id: draftId, title: title.trim(), body }, true);
+      const draft = result.data?.updateProjectV2DraftIssue?.draftIssue;
+      if (!draft?.id) throw new GitHubError('Draft update unconfirmed. Refresh the board before trying again.', { uncertain: true });
+      return { contentId: draft.id, title: draft.title, body: draft.body || '' };
+    },
+    async removeProjectItem(projectId, itemId) {
+      [projectId, itemId].forEach(nodeId);
+      const result = await projectQuery(`mutation BlackboardRemoveCard($project:ID!,$item:ID!) {
+        deleteProjectV2Item(input:{projectId:$project,itemId:$item}) { deletedItemId }
+      }`, { project: projectId, item: itemId }, true);
+      if (result.data?.deleteProjectV2Item?.deletedItemId !== itemId) throw new GitHubError('Card removal unconfirmed. Refresh the board before trying again.', { uncertain: true });
+      return { id: itemId };
+    },
+    async updateChannelDetails(id, { name, description = '' }) {
+      const path = issuePath(id);
+      if (typeof name !== 'string' || !name.trim()) throw new GitHubError('A topic name is required.');
+      const current = await request(path);
+      if (!isTopic(current)) throw new GitHubError('Only Blackboard topics can be edited.');
+      return channel(await request(path, { method: 'PATCH', body: { title: CHANNEL_PREFIX + name.trim(), body: description } }));
+    },
+    async changeProjectColumn(projectId, { id = null, name, color = 'GRAY', description = '', direction = null, remove = false }) {
+      nodeId(projectId);
+      if (id !== null) nodeId(id);
+      if ((remove || direction !== null) && id === null) throw new GitHubError('Choose a status column.');
+      if (direction !== null && ![-1, 1].includes(direction)) throw new GitHubError('Invalid column direction.');
+      if (!remove && direction === null && (typeof name !== 'string' || !name.trim())) throw new GitHubError('A column name is required.');
+      if (!['GRAY', 'BLUE', 'GREEN', 'YELLOW', 'ORANGE', 'RED', 'PINK', 'PURPLE'].includes(color)) throw new GitHubError('Invalid column color.');
+      // Fetch current options before replacing the field configuration. Retain every
+      // existing option ID: omitting IDs would clear cards' status assignments.
+      const snapshot = await api.readProject(projectId);
+      const field = snapshot.statusField;
+      if (!field) throw new GitHubError('This project has no Status field.');
+      let options = field.options.map((option) => ({ id: option.id, name: option.name, color: option.color || 'GRAY', description: option.description || '' }));
+      const index = options.findIndex((option) => option.id === id);
+      if (id !== null && index < 0) throw new GitHubError('That column no longer exists. Refresh the board.');
+      if (remove) {
+        if (options.length <= 1) throw new GitHubError('Keep at least one status column.');
+        options.splice(index, 1);
+      } else if (direction !== null) {
+        const destination = index + direction;
+        if (destination < 0 || destination >= options.length) return field;
+        [options[index], options[destination]] = [options[destination], options[index]];
+      } else if (id === null) options.push({ name: name.trim(), color, description });
+      else options[index] = { id, name: name.trim(), color, description };
+      const result = await projectQuery(`mutation BlackboardChangeColumn($field:ID!,$options:[ProjectV2SingleSelectFieldOptionInput!]!) {
+        updateProjectV2Field(input:{fieldId:$field,singleSelectOptions:$options}) {
+          projectV2Field { ... on ProjectV2SingleSelectField { id name options { id name color description } } }
+        }
+      }`, { field: field.id, options }, true);
+      const updated = result.data?.updateProjectV2Field?.projectV2Field;
+      if (!updated?.options) throw new GitHubError('Column update unconfirmed. Refresh the board before trying again.', { uncertain: true });
+      return updated;
+    },
     async listTags() {
       // Suggest only names in use, rather than GitHub's unused default labels.
       const issues = await listAll('/issues?state=all&sort=created&direction=asc');

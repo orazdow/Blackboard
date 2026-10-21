@@ -1,5 +1,6 @@
 import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from 'solid-js';
-import { createGitHubClient, isConfigured, GITHUB_OWNER, GITHUB_REPO } from './api.js';
+import { createGitHubClient, isConfigured, isProjectConfigured, GITHUB_OWNER, GITHUB_REPO } from './api.js';
+import ProjectBoard from './project-ui.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
 import { createMilestoneTracker, sortMilestones } from './milestone-state.js';
@@ -8,7 +9,16 @@ const formatTime = (date) => date.toLocaleTimeString([], { hour: '2-digit', minu
 const POLL_INTERVAL_MS = 10000;
 const topicSelectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:topic`;
 const milestonesExpandedKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestones-expanded`;
+const sidebarSectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:sidebar-section`;
 const activeMilestoneKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestone`;
+const activeProjectKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:project`;
+function savedProject() {
+  try {
+    const id = sessionStorage.getItem(activeProjectKey);
+    return id && id !== 'preview' ? id : null;
+  }
+  catch { return null; }
+}
 function savedMilestone() {
   try {
     const id = Number(sessionStorage.getItem(activeMilestoneKey));
@@ -16,9 +26,12 @@ function savedMilestone() {
   } catch { return null; }
 }
 const formatDueDate = (date) => new Date(`${date}T00:00:00`).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-function savedMilestonesExpanded() {
-  try { return localStorage.getItem(milestonesExpandedKey) === 'true'; }
-  catch { return false; }
+function savedSidebarSection() {
+  try {
+    const saved = localStorage.getItem(sidebarSectionKey);
+    if (saved !== null) return ['projects', 'milestones'].includes(saved) ? saved : null;
+    return localStorage.getItem(milestonesExpandedKey) === 'true' ? 'milestones' : null;
+  } catch { return null; }
 }
 function savedTopic() {
   try {
@@ -37,6 +50,18 @@ export default function App() {
   const topicTracker = createTopicTracker();
   const milestoneTracker = createMilestoneTracker();
   const [topics, setTopics] = createSignal([]);
+  const [projects, setProjects] = createSignal([]);
+  const [projectsLoading, setProjectsLoading] = createSignal(false);
+  const [projectsError, setProjectsError] = createSignal('');
+  const [activeProjectId, setActiveProjectId] = createSignal(savedProject());
+  const [returnProjectId, setReturnProjectId] = createSignal(null);
+  createEffect(() => {
+    const id = activeProjectId();
+    try {
+      if (id) sessionStorage.setItem(activeProjectKey, id);
+      else sessionStorage.removeItem(activeProjectKey);
+    } catch { /* Navigation still works without storage. */ }
+  });
   const [knownTags, setKnownTags] = createSignal([]);
   const [tagEditing, setTagEditing] = createSignal(null);
   const [tagDrafts, setTagDrafts] = createSignal({});
@@ -61,10 +86,13 @@ export default function App() {
       else sessionStorage.setItem(activeMilestoneKey, String(id));
     } catch { /* Navigation still works without storage. */ }
   });
-  const [milestonesExpanded, setMilestonesExpanded] = createSignal(savedMilestonesExpanded());
+  const [expandedSidebarSection, setExpandedSidebarSection] = createSignal(savedSidebarSection());
+  const milestonesExpanded = () => expandedSidebarSection() === 'milestones';
+  const projectsExpanded = () => expandedSidebarSection() === 'projects';
+  const toggleSidebarSection = (section) => setExpandedSidebarSection((previous) => previous === section ? null : section);
   createEffect(() => {
-    const expanded = milestonesExpanded();
-    try { localStorage.setItem(milestonesExpandedKey, String(expanded)); }
+    const expanded = expandedSidebarSection();
+    try { localStorage.setItem(sidebarSectionKey, expanded || ''); }
     catch { /* The section still toggles when browser storage is unavailable. */ }
   });
   const [creatingTopic, setCreatingTopic] = createSignal(false);
@@ -160,6 +188,8 @@ export default function App() {
   let nextAttempt = 0;
   let channelRevision = 0;
   let milestoneRevision = 0;
+  let projectsNextAttempt = 0;
+  let projectFailures = 0;
 
   onCleanup(() => { stopped = true; });
 
@@ -213,7 +243,8 @@ export default function App() {
         setMilestones(milestoneTracker.reconcile(incomingMilestones));
         setMilestonesLoaded(true);
       }
-      if (activeMilestoneId() === null) await loadMessages(activeId());
+      if (activeMilestoneId() === null && activeProjectId() === null) await loadMessages(activeId());
+      if (projectsExpanded() || activeProjectId() || returnProjectId()) loadProjects();
       failures = 0;
       nextAttempt = 0;
       setLastSync(new Date());
@@ -243,7 +274,9 @@ export default function App() {
     });
   }
 
-  async function selectTopic(id) {
+  async function selectTopic(id, fromProject = null) {
+    setActiveProjectId(null);
+    setReturnProjectId(fromProject);
     setTagEditing(null);
     setActiveMilestoneId(null);
     setCollapsedTopics((previous) => {
@@ -262,9 +295,36 @@ export default function App() {
   }
 
   function selectMilestone(id) {
+    setActiveProjectId(null);
+    setReturnProjectId(null);
     setTagEditing(null);
     setActiveMilestoneId(id);
   }
+
+  async function loadProjects(force = false) {
+    if (!isProjectConfigured || stopped || projectsLoading() || (!force && Date.now() < projectsNextAttempt)) return;
+    setProjectsLoading(true);
+    try {
+      const incoming = await api.listProjects();
+      if (!stopped) { setProjects(incoming); setProjectsError(''); }
+      projectFailures = 0;
+      projectsNextAttempt = Date.now() + 30000;
+    } catch (failure) {
+      if (!stopped) setProjectsError(failure.message);
+      projectFailures++;
+      projectsNextAttempt = Math.max(failure.retryAt || 0, Date.now() + Math.min(120000, 10000 * 2 ** (projectFailures - 1)));
+    } finally { if (!stopped) setProjectsLoading(false); }
+  }
+
+  function selectProject(id) {
+    setActiveMilestoneId(null);
+    setReturnProjectId(null);
+    setTagEditing(null);
+    setExpandedSidebarSection('projects');
+    setActiveProjectId(id);
+  }
+
+  createEffect(() => { if (projectsExpanded()) queueMicrotask(() => loadProjects()); });
 
   function startTag() {
     const id = activeId();
@@ -328,7 +388,7 @@ export default function App() {
       const details = { name: milestoneName(), description: milestoneDescription(), dueDate: milestoneDueDate() || null };
       const saved = await (editing ? api.updateMilestone(editing.id, details) : api.createMilestone(details));
       rememberMilestone(saved);
-      setMilestonesExpanded(true);
+      setExpandedSidebarSection('milestones');
       selectMilestone(saved.id);
       milestoneDialog.close();
       refresh();
@@ -706,14 +766,14 @@ export default function App() {
         </div>
         <nav class="channel-list" aria-label="Topics">
           <For each={visibleTopics()}>{(item) => (
-            <div class="channel-row" style={{ 'margin-left': `${Math.min(item.depth, 5) * 16}px` }} classList={{ 'is-active': activeMilestoneId() === null && activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) || item.syncState === 'confirming' }} aria-busy={closing()[item.id]?.status === 'pending' || item.syncState === 'confirming'}>
+            <div class="channel-row" style={{ 'margin-left': `${Math.min(item.depth, 5) * 16}px` }} classList={{ 'is-active': activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) || item.syncState === 'confirming' }} aria-busy={closing()[item.id]?.status === 'pending' || item.syncState === 'confirming'}>
             <Show when={item.hasChildren} fallback={<span class="topic-expand" aria-hidden="true" />}>
               <button type="button" class="topic-expand" aria-label={`${collapsedTopics().has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`} aria-expanded={!collapsedTopics().has(item.id)} onClick={() => toggleTopic(item.id)}>{collapsedTopics().has(item.id) ? '›' : '⌄'}</button>
             </Show>
             <button
               type="button"
               class="channel-button"
-              aria-current={activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined}
+              aria-current={activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined}
               onClick={() => selectTopic(item.id)}
             >
               <span class="channel-hash" aria-hidden="true">#</span>{item.name}
@@ -737,15 +797,32 @@ export default function App() {
             </div>
           )}</Show>
         </nav>
-        <section class="milestones-section" classList={{ 'is-expanded': milestonesExpanded() }} aria-label="Milestones">
-          <button type="button" class="milestones-toggle" aria-expanded={milestonesExpanded()} aria-controls="milestones-panel"
-            onClick={() => setMilestonesExpanded((expanded) => !expanded)}>
+        <section class="sidebar-section" classList={{ 'is-expanded': projectsExpanded() }} aria-label="Projects">
+          <button type="button" class="sidebar-section-toggle" aria-expanded={projectsExpanded()} aria-controls="projects-panel"
+            onClick={() => toggleSidebarSection('projects')}>
+            <span class="sidebar-label">Projects</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d={projectsExpanded() ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'} />
+            </svg>
+          </button>
+          <div id="projects-panel" class="sidebar-section-panel" hidden={!projectsExpanded()}>
+            <Show when={projectsError()}><p class="project-sidebar-error" role="alert">{projectsError()}</p></Show>
+            <nav class="project-list" aria-label="Projects"><For each={projects()}>{(item) => (
+              <button type="button" class="project-list-item" classList={{ 'is-active': activeProjectId() === item.id }} aria-current={activeProjectId() === item.id ? 'page' : undefined} onClick={() => selectProject(item.id)}>
+                <span>{item.name}</span><Show when={item.closed}><small>Closed</small></Show>
+              </button>
+            )}</For></nav>
+          </div>
+        </section>
+        <section class="sidebar-section" classList={{ 'is-expanded': milestonesExpanded() }} aria-label="Milestones">
+          <button type="button" class="sidebar-section-toggle" aria-expanded={milestonesExpanded()} aria-controls="milestones-panel"
+            onClick={() => toggleSidebarSection('milestones')}>
             <span class="sidebar-label">Milestones</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d={milestonesExpanded() ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'} />
             </svg>
           </button>
-          <div id="milestones-panel" class="milestones-panel" hidden={!milestonesExpanded()}>
+          <div id="milestones-panel" class="sidebar-section-panel" hidden={!milestonesExpanded()}>
             <div class="milestone-list-actions"><button type="button" class="new-milestone-button" disabled={!isConfigured} onClick={() => editMilestone()}><span aria-hidden="true">+</span> New milestone</button></div>
             <Show when={milestones().length} fallback={<p>{!isConfigured ? 'Connect to GitHub to load milestones.' : milestonesLoaded() ? 'No milestones yet.' : 'Loading milestones…'}</p>}>
               <nav class="milestone-list" aria-label="Milestones"><For each={milestones()}>{(item) => (
@@ -764,6 +841,7 @@ export default function App() {
         </footer>
       </aside>
 
+      <Show when={activeProjectId()} keyed fallback={
       <Show when={activeMilestoneId() === null} fallback={<MilestoneOverview />}>
       <Show when={topic()} fallback={
         <section class="chat-panel empty-chat">
@@ -787,6 +865,7 @@ export default function App() {
         </Show>
 
         <div class="chat-topic-controls">
+          <Show when={returnProjectId()}><button type="button" class="parent-topic-link" onClick={() => selectProject(returnProjectId())}>‹ Back to project</button></Show>
           <Show when={topics().find((item) => item.id === topic().parentId)}>{(parent) => (
             <button type="button" class="parent-topic-link" onClick={() => selectTopic(parent().id)}>‹ {parent().name}</button>
           )}</Show>
@@ -898,6 +977,8 @@ export default function App() {
       </section>
       </Show>
       </Show>
+      }>{(id) => <ProjectBoard api={api} projectId={id} projectName={projects().find((item) => item.id === id)?.name} topics={topics()} onOpenTopic={(topicId) => selectTopic(topicId, id)}
+        onTopicUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((topic) => topic.id === updated.id)?.parentId ?? null })} />}</Show>
       <dialog ref={milestoneDialog} class="topic-status-dialog milestone-dialog" aria-labelledby="milestone-form-title"
         onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, milestoneSaving())}
         onCancel={(event) => { if (milestoneSaving()) event.preventDefault(); }}>
