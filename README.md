@@ -23,6 +23,16 @@ with your token, repository owner, and repository name. The token needs
 Issues read/write permission for that repository. Existing local settings
 were preserved during the directory move.
 
+Discussion integration is experimental and disabled by default. Set
+`ENABLE_DISCUSSIONS = true` in `client/src/main.js` to turn it on; leave it false
+for the original issue-only topic UI, with no discussion requests or Task/Talk switch.
+The API helpers remain available independently of this UI flag.
+
+For Discussion topics, enable Discussions in the repository and grant the same
+token Discussions read/write permission. New topic has an inline Task/Talk
+switch (Task initially, then your last choice). Discussions use General by default;
+labels remain shared tags. Comments and replies appear chronologically in chat.
+
 For Projects, set the optional `GITHUB_PROJECT_TOKEN` in the same local file to
 a classic personal access token with the `project` scope. Keep `GITHUB_TOKEN`
 for repository operations. Projects must be linked to the configured repository

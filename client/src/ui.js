@@ -1,5 +1,5 @@
 import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from 'solid-js';
-import { createGitHubClient, isConfigured, isProjectConfigured, GITHUB_OWNER, GITHUB_REPO } from './api.js';
+import { createGitHubClient, isConfigured, isProjectConfigured, isDiscussionId, GITHUB_OWNER, GITHUB_REPO } from './api.js';
 import ProjectBoard from './project-ui.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
@@ -12,6 +12,13 @@ const milestonesExpandedKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milesto
 const sidebarSectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:sidebar-section`;
 const activeMilestoneKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestone`;
 const activeProjectKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:project`;
+const topicKindKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:new-topic-kind`;
+const storedTopicId = (value) => isDiscussionId(value) ? value : Number(value);
+const compareMessages = (a, b) => a.time - b.time || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+function savedTopicKind() {
+  try { return localStorage.getItem(topicKindKey) === 'discussion' ? 'discussion' : 'task'; }
+  catch { return 'task'; }
+}
 function savedProject() {
   try {
     const id = sessionStorage.getItem(activeProjectKey);
@@ -35,8 +42,8 @@ function savedSidebarSection() {
 }
 function savedTopic() {
   try {
-    const id = Number(sessionStorage.getItem(topicSelectionKey));
-    return Number.isSafeInteger(id) && id > 0 ? id : null;
+    const id = storedTopicId(sessionStorage.getItem(topicSelectionKey));
+    return isDiscussionId(id) || Number.isSafeInteger(id) && id > 0 ? id : null;
   } catch { return null; }
 }
 const reactionSymbols = {
@@ -45,7 +52,8 @@ const reactionSymbols = {
   hooray: ['🎉', 'Hooray'], rocket: ['🚀', 'Rocket'], eyes: ['👀', 'Eyes'],
 };
 
-export default function App() {
+export default function App(props = {}) {
+  const discussionsEnabled = props.discussionsEnabled === true;
   const api = createGitHubClient();
   const topicTracker = createTopicTracker();
   const milestoneTracker = createMilestoneTracker();
@@ -96,11 +104,18 @@ export default function App() {
     catch { /* The section still toggles when browser storage is unavailable. */ }
   });
   const [creatingTopic, setCreatingTopic] = createSignal(false);
+  const [topicKind, setTopicKind] = createSignal(savedTopicKind());
+  const creationKind = () => !discussionsEnabled || topicParent() ? 'task' : topicKind();
+  function chooseTopicKind(kind) {
+    setTopicKind(kind);
+    try { localStorage.setItem(topicKindKey, kind); } catch { /* Storage is optional. */ }
+  }
   const [topicParent, setTopicParent] = createSignal(null);
   const [collapsedTopics, setCollapsedTopics] = createSignal(new Set());
   const visibleTopics = () => topicRows(topics(), collapsedTopics());
   const [topicName, setTopicName] = createSignal('');
-  const [activeId, setActiveId] = createSignal(savedTopic());
+  const restoredTopic = savedTopic();
+  const [activeId, setActiveId] = createSignal(!discussionsEnabled && isDiscussionId(restoredTopic) ? null : restoredTopic);
   createEffect(() => {
     const id = activeId();
     try {
@@ -190,6 +205,23 @@ export default function App() {
   let milestoneRevision = 0;
   let projectsNextAttempt = 0;
   let projectFailures = 0;
+  let discussionsNextAttempt = 0;
+  let discussionFailures = 0;
+  let discussionFailure = null;
+  let discussionSnapshot = [];
+
+  async function loadDiscussions() {
+    if (!discussionsEnabled) return { items: [], failure: null };
+    if (Date.now() < discussionsNextAttempt) return { items: discussionSnapshot, failure: discussionFailure };
+    try {
+      discussionSnapshot = await api.listDiscussions({ includeClosed: true, includeArchived: true });
+      discussionFailures = 0; discussionFailure = null; discussionsNextAttempt = 0;
+    } catch (failure) {
+      discussionFailure = failure;
+      discussionsNextAttempt = Math.max(failure.retryAt || 0, Date.now() + Math.min(120000, POLL_INTERVAL_MS * 2 ** discussionFailures++));
+    }
+    return { items: discussionSnapshot, failure: discussionFailure };
+  }
 
   onCleanup(() => { stopped = true; });
 
@@ -202,11 +234,16 @@ export default function App() {
     try {
       const revision = channelRevision;
       // These share the issue-list requests, including pagination and conditional reads.
-      const [allChannels, incomingTags] = await Promise.all([
+      const [issueChannels, incomingTags, discussionRead] = await Promise.all([
         api.listChannels({ includeClosed: true, includeArchived: true, includeHierarchy: true }),
         api.listTags(),
+        loadDiscussions(),
       ]);
       if (stopped) return;
+      // A discussion permission failure must not hide or prevent reading tasks.
+      const discussions = discussionRead.items;
+      const allChannels = [...issueChannels, ...discussions];
+      if (discussionRead.failure) setError(`Discussions: ${discussionRead.failure.message}`);
       if (revision === channelRevision) {
         batch(() => {
           const channels = topicTracker.reconcile(allChannels).filter((item) => !item.archived);
@@ -217,7 +254,8 @@ export default function App() {
           }
           for (const [key, change] of Object.entries(closing())) {
             if (change?.status !== 'unconfirmed') continue;
-            const id = Number(key);
+            const id = storedTopicId(key);
+            if (isDiscussionId(id) && discussionRead.failure) continue;
             const item = allChannels.find((entry) => entry.id === id);
             const confirmed = change.target === 'deleted' ? !item
               : change.target === 'archived' ? item?.archived : item?.state === change.target;
@@ -229,7 +267,7 @@ export default function App() {
           }
           for (const [key, operation] of Object.entries(tagOperations())) {
             if (operation?.status !== 'unconfirmed') continue;
-            const item = allChannels.find((entry) => entry.id === Number(key));
+            const item = allChannels.find((entry) => entry.id === storedTopicId(key));
             if (!item) continue;
             const present = item.tags.some((tag) => tag.name.toLowerCase() === operation.name.toLowerCase());
             if (present === (operation.target === 'add')) setTagOperations((previous) => ({ ...previous, [key]: null }));
@@ -248,7 +286,7 @@ export default function App() {
       failures = 0;
       nextAttempt = 0;
       setLastSync(new Date());
-      setSyncFailed(false);
+      setSyncFailed(Boolean(discussionRead.failure));
     } catch (failure) {
       failures += 1;
       nextAttempt = Math.max(failure.retryAt || 0, Date.now() + Math.min(120000, POLL_INTERVAL_MS * 2 ** (failures - 1)));
@@ -270,7 +308,7 @@ export default function App() {
     // Preserve a newly confirmed local send if this read started before it.
     setMessages((previous) => {
       const merged = new Map([...(previous[id] || []), ...incoming].map((item) => [item.id, item]));
-      return { ...previous, [id]: [...merged.values()].sort((a, b) => a.id - b.id) };
+      return { ...previous, [id]: [...merged.values()].sort(compareMessages) };
     });
   }
 
@@ -451,7 +489,7 @@ export default function App() {
           <select aria-label="Add topic to milestone" value="" disabled={!isConfigured}
             onChange={(event) => { const id = Number(event.currentTarget.value); if (id) assignMilestone(id, item().id); event.currentTarget.value = ''; }}>
             <option value="">Add topic…</option>
-            <For each={topics().filter((entry) => entry.milestoneId !== item().id)}>{(entry) => <option value={entry.id} disabled={assignmentBusy()[entry.id]}>#{entry.name}{entry.milestoneId ? ' (move here)' : ''}</option>}</For>
+            <For each={topics().filter((entry) => entry.kind !== 'discussion' && entry.milestoneId !== item().id)}>{(entry) => <option value={entry.id} disabled={assignmentBusy()[entry.id]}>#{entry.name}{entry.milestoneId ? ' (move here)' : ''}</option>}</For>
           </select>
         </div>
         <Show when={linkedTopics().length} fallback={<p class="muted">No active topics assigned yet.</p>}>
@@ -490,6 +528,12 @@ export default function App() {
     return <div class="message-text"><For each={messageBlocks(props.text)}>{(block) => (
       block.quote ? <blockquote><Inline text={block.text} /></blockquote> : <div><Inline text={block.text} /></div>
     )}</For></div>;
+  }
+
+  function TopicMarker(props) {
+    return <span class="channel-hash" title={props.discussion ? 'Discussion' : 'Task'} aria-label={props.discussion ? 'Discussion' : 'Task'}>
+      <Show when={props.discussion} fallback="#"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z" /></svg></Show>
+    </span>;
   }
 
   async function openReactions(commentId) {
@@ -562,6 +606,7 @@ export default function App() {
 
   function startTopic(parent = null) {
     if (creating() || createUncertain()) return;
+    if (parent?.kind === 'discussion') return;
     setTopicParent(parent);
     setTopicName('');
     setCreatingTopic(true);
@@ -589,10 +634,11 @@ export default function App() {
     if (!name || creating() || createUncertain() || !isConfigured) return;
     setCreating(true);
     const parentId = topicParent()?.id ?? null;
-    setPendingTopic({ name, parentId, status: 'creating' });
+    const kind = creationKind();
+    setPendingTopic({ name, parentId, kind, status: 'creating' });
     setError('');
     try {
-      const created = topicTracker.remember(await api.createChannel({ name, parentId }));
+      const created = topicTracker.remember(await (kind === 'discussion' ? api.createDiscussion({ name }) : api.createChannel({ name, parentId })));
       channelRevision += 1;
       batch(() => {
         setTopics((previous) => [...previous.filter((item) => item.id !== created.id), created]);
@@ -615,7 +661,7 @@ export default function App() {
         return;
       }
       setCreateUncertain(failure.uncertain);
-      setPendingTopic(failure.uncertain ? { name, parentId, status: 'unconfirmed' } : null);
+      setPendingTopic(failure.uncertain ? { name, parentId, kind, status: 'unconfirmed' } : null);
       setError(failure.message);
     } finally { setCreating(false); }
   }
@@ -705,7 +751,7 @@ export default function App() {
     setError('');
     try {
       const sent = await api.sendMessage(id, text);
-      setMessages((previous) => ({ ...previous, [id]: [...(previous[id] || []).filter((item) => item.id !== sent.id), sent].sort((a, b) => a.id - b.id) }));
+      setMessages((previous) => ({ ...previous, [id]: [...(previous[id] || []).filter((item) => item.id !== sent.id), sent].sort(compareMessages) }));
       setOutbox((previous) => ({ ...previous, [id]: null }));
     } catch (failure) {
       if (failure.uncertain) {
@@ -747,6 +793,11 @@ export default function App() {
                 ref={(element) => requestAnimationFrame(() => element.focus())}
                 onInput={(event) => setTopicName(event.currentTarget.value)} />
               <div class="new-topic-form-actions">
+              <Show when={discussionsEnabled}><fieldset class="topic-kind-options" disabled={creating() || createUncertain() || Boolean(topicParent())}>
+                <legend class="sr-only">Topic type</legend>
+                <label><input type="radio" name="topicKind" value="task" checked={creationKind() === 'task'} onChange={() => chooseTopicKind('task')} /><span>Task</span></label>
+                <label><input type="radio" name="topicKind" value="discussion" checked={creationKind() === 'discussion'} onChange={() => chooseTopicKind('discussion')} /><span>Talk</span></label>
+              </fieldset></Show>
                 <button type="button" class="cancel-topic-button" disabled={creating()} onClick={closeTopicForm}>Cancel</button>
                 <button type="submit" disabled={!topicName().trim() || creating() || createUncertain()}>{creating() ? 'Creating…' : createUncertain() ? 'Unconfirmed' : 'Create'}</button>
               </div>
@@ -776,11 +827,11 @@ export default function App() {
               aria-current={activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined}
               onClick={() => selectTopic(item.id)}
             >
-              <span class="channel-hash" aria-hidden="true">#</span>{item.name}
+              <TopicMarker discussion={item.kind === 'discussion'} />{item.name}
               <Show when={closing()[item.id] || item.state === 'closed'}><small role="status">{statusLabel(item.id) || 'Closed'}</small></Show>
             </button>
-            <button type="button" class="add-subtopic-button" disabled={Boolean(closing()[item.id]) || creating() || createUncertain() || !isConfigured}
-              aria-label={`Create subtopic under ${item.name}`} title="Create subtopic" onClick={() => startTopic(item)}><span aria-hidden="true">+</span></button>
+            <Show when={item.kind !== 'discussion'}><button type="button" class="add-subtopic-button" disabled={Boolean(closing()[item.id]) || creating() || createUncertain() || !isConfigured}
+              aria-label={`Create subtopic under ${item.name}`} title="Create subtopic" onClick={() => startTopic(item)}><span aria-hidden="true">+</span></button></Show>
             <button type="button" class="remove-topic-button"
               disabled={Boolean(closing()[item.id])}
               aria-label={`Remove topic ${item.name}`} title={`Remove topic ${item.name}`}
@@ -791,7 +842,7 @@ export default function App() {
             <div class="channel-row is-pending" style={{ 'margin-left': pending().parentId ? `${Math.min((visibleTopics().find((item) => item.id === pending().parentId)?.depth ?? 0) + 1, 5) * 16}px` : '0' }} aria-busy={pending().status === 'creating'}>
               <span class="topic-expand" aria-hidden="true" />
               <div class="channel-button">
-                <span class="channel-hash" aria-hidden="true">#</span>{pending().name}
+                <TopicMarker discussion={pending().kind === 'discussion'} />{pending().name}
                 <small role="status">{pending().status === 'creating' ? 'Creating…' : 'Unconfirmed'}</small>
               </div>
             </div>
@@ -853,7 +904,7 @@ export default function App() {
       }>
       <section class="chat-panel" aria-label={`${topic().name} chat`}>
         <header class="chat-header">
-          <h2><span class="channel-hash" aria-hidden="true">#</span> {topic().name}</h2>
+          <h2><TopicMarker discussion={topic().kind === 'discussion'} /> {topic().name}</h2>
           <p class="muted">{topic().description}</p>
           <div class="chat-header-actions">
             <a class="preview-badge" href={topic().url} target="_blank" rel="noreferrer">GitHub ↗</a>
@@ -869,7 +920,7 @@ export default function App() {
           <Show when={topics().find((item) => item.id === topic().parentId)}>{(parent) => (
             <button type="button" class="parent-topic-link" onClick={() => selectTopic(parent().id)}>‹ {parent().name}</button>
           )}</Show>
-          <label class="topic-milestone-select" classList={{ 'is-pending': assignmentBusy()[topic().id] }} title={topicMilestoneLabel()}>
+          <Show when={topic().kind !== 'discussion'}><label class="topic-milestone-select" classList={{ 'is-pending': assignmentBusy()[topic().id] }} title={topicMilestoneLabel()}>
             <span class="sr-only">Milestone</span>
             <span class="topic-milestone-value" aria-hidden="true">{topicMilestoneLabel()}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -884,7 +935,7 @@ export default function App() {
               <Show when={topic().milestoneId && !milestones().some((item) => item.id === topic().milestoneId)}><option value={topic().milestoneId}>Milestone #{topic().milestoneId}</option></Show>
               <For each={milestones()}>{(item) => <option value={item.id}>{item.name}{item.state === 'closed' ? ' (closed)' : ''}</option>}</For>
             </select>
-          </label>
+          </label></Show>
           <button type="button" class="topic-status" classList={{ 'is-closed': topic().state === 'closed' }}
             disabled={Boolean(closing()[topic().id])} aria-haspopup="dialog"
             aria-label={`${topic().state === 'open' ? 'Open' : 'Closed'} topic: ${topic().state === 'open' ? 'close' : 'reopen'} ${topic().name}`}
@@ -918,8 +969,8 @@ export default function App() {
         </div>
         <div ref={messageList} class="message-list" role="log" aria-label="Messages" aria-live="polite" aria-relevant="additions">
           <div class="conversation-start">
-            <span class="conversation-icon" aria-hidden="true">#</span>
-            <h3>Welcome to #{topic().name}</h3>
+            <span class="conversation-icon" aria-hidden="true"><TopicMarker discussion={topic().kind === 'discussion'} /></span>
+            <h3>Welcome to {topic().kind === 'discussion' ? '' : '#'}{topic().name}</h3>
             <p class="muted">The beginning of this conversation.</p>
           </div>
           <For each={currentMessages()}>{(message) => (
@@ -930,6 +981,7 @@ export default function App() {
                   <span class="message-author" title={message.sender ? `Declared sender: ${message.sender} · GitHub author: ${message.author}` : message.author}>{message.sender || message.author}</span>
                   <time dateTime={message.time.toISOString()}>{formatTime(message.time)}</time>
                 </div>
+                <Show when={message.replyTo}><a class="message-reply-reference" href={message.replyTo.url} target="_blank" rel="noopener noreferrer">↳ Replying to {message.replyTo.author}</a></Show>
                 <MessageText text={message.text} />
                   <div class="message-reactions" role="group" aria-label="Reactions">
                     <For each={message.reactions}>{(type) => (
@@ -961,8 +1013,8 @@ export default function App() {
           <div class="composer-box">
             <textarea
               ref={composerInput}
-              aria-label={`Message #${topic().name}`}
-              placeholder={`Message #${topic().name}`}
+              aria-label={`Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`}
+              placeholder={`Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`}
               rows="2"
               value={draft()}
               onInput={(event) => setDrafts((previous) => ({ ...previous, [activeId()]: event.currentTarget.value }))}
@@ -977,7 +1029,7 @@ export default function App() {
       </section>
       </Show>
       </Show>
-      }>{(id) => <ProjectBoard api={api} projectId={id} projectName={projects().find((item) => item.id === id)?.name} topics={topics()} onOpenTopic={(topicId) => selectTopic(topicId, id)}
+      }>{(id) => <ProjectBoard api={api} projectId={id} projectName={projects().find((item) => item.id === id)?.name} topics={topics().filter((item) => item.kind !== 'discussion')} onOpenTopic={(topicId) => selectTopic(topicId, id)}
         onTopicUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((topic) => topic.id === updated.id)?.parentId ?? null })} />}</Show>
       <dialog ref={milestoneDialog} class="topic-status-dialog milestone-dialog" aria-labelledby="milestone-form-title"
         onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, milestoneSaving())}

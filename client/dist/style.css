@@ -69,7 +69,7 @@ button:where(:hover:not(:disabled)) {
 
 button:disabled {
   opacity: 0.55;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 input,
@@ -129,7 +129,18 @@ textarea::placeholder {
 .new-topic-form { display: grid; gap: var(--space-2); margin: var(--space-2) var(--space-1) 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); }
 .new-topic-form label { font-size: 0.75rem; color: var(--color-muted); }
 .new-topic-form input { width: 100%; min-width: 0; font-size: 0.8rem; }
-.new-topic-form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-1); }
+.topic-kind-options { display: flex; flex: 0 0 96px; gap: 2px; margin: 0 auto 0 0; padding: 2px; border: 1px solid var(--color-border); border-radius: 6px; min-width: 0; background: #0e1c2b; }
+.topic-kind-options label { position: relative; flex: 1; min-width: 0; cursor: pointer; }
+.topic-kind-options input[type=radio] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: inherit; }
+.topic-kind-options label span { display: block; padding: 3px 5px; border-radius: 3px; color: var(--color-muted); text-align: center; font-weight: 600; font-size: 0.7rem; }
+.topic-kind-options input:checked + span { background: #29445e; color: #c3dbef; }
+.topic-kind-options:not(:disabled) label:hover span { background: #20374f; color: var(--color-text); }
+.topic-kind-options input:focus-visible + span { outline: 1px solid #7ea9d7; outline-offset: 1px; }
+.topic-kind-options:disabled { opacity: 0.5; }
+.topic-kind-options:disabled label { cursor: default; }
+.message-reply-reference { display: inline-block; margin-bottom: var(--space-1); color: var(--color-muted); text-decoration: none; font-size: 0.7rem; }
+.message-reply-reference:hover { color: #b5d3f9; }
+.new-topic-form-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-1); }
 .new-topic-form-actions button { padding: var(--space-1) var(--space-2); font-size: 0.75rem; }
 .cancel-topic-button { color: var(--color-muted); background: transparent; }
 .workspace-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
@@ -311,7 +322,7 @@ textarea::placeholder {
 .chat-header { position: relative; flex: 0 0 var(--header-height); padding: var(--space-6) var(--space-8); border-bottom: 1px solid var(--color-border); }
 .chat-header h2 { margin: 0 0 var(--space-1); font-size: 1.1rem; }
 .chat-header h2 { padding-right: 6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-header p { margin: 0; padding-right: 6rem; font-size: 0.85rem; }
+.chat-header p { margin: 0; padding-right: 6rem; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-header-actions { position: absolute; right: var(--space-8); top: var(--space-6); display: flex; align-items: center; gap: var(--space-3); }
 .preview-badge { font-size: 0.7rem; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: 20px; color: var(--color-muted); }
 .topic-status { display: flex; align-items: center; gap: var(--space-2); border: 1px solid #35594f; border-radius: 20px; padding: var(--space-1) var(--space-3); background: #15352f; color: #9cddc2; font-size: 0.75rem; font-weight: 600; }

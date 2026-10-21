@@ -24,7 +24,7 @@ export function createTopicTracker() {
           merged.set(id, desired);
         }
       }
-      return [...merged.values()].sort((a, b) => a.id - b.id);
+      return [...merged.values()].sort((a, b) => (a.number ?? a.id) - (b.number ?? b.id));
     },
   };
 }

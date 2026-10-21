@@ -6,6 +6,8 @@ export { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO };
 export const CHANNEL_PREFIX = '💬 ';
 export const ARCHIVED_LABEL = 'blackboard:archived';
 const REACTION_TYPES = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
+const REACTION_ENUMS = ['THUMBS_UP', 'THUMBS_DOWN', 'LAUGH', 'CONFUSED', 'HEART', 'HOORAY', 'ROCKET', 'EYES'];
+export const isDiscussionId = (id) => typeof id === 'string' && /^discussion:[A-Za-z0-9_=-]{1,256}$/.test(id);
 export const isConfigured = Boolean(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
 export const isProjectConfigured = Boolean(localConfig.GITHUB_PROJECT_TOKEN);
 
@@ -177,6 +179,79 @@ export function createGitHubClient({
   async function projectQuery(query, variables, mutation = false) {
     return request('', { method: 'POST', graphql: true, graphqlRead: !mutation, authToken: projectToken, body: { query, variables } });
   }
+  const discussionQuery = (query, variables, mutation = false) => request('', {
+    method: 'POST', graphql: true, graphqlRead: !mutation, body: { query, variables },
+  });
+  const discussionNode = (id) => {
+    if (!isDiscussionId(id)) throw new GitHubError('Invalid discussion identifier.');
+    return id.slice('discussion:'.length);
+  };
+  const discussionFields = 'id number title body closed url category { id name } labels(first:100) { nodes { name color description } pageInfo { hasNextPage endCursor } }';
+  const commentFields = 'id body createdAt url author { login } reactionGroups { content users { totalCount } }';
+  const discussionMessage = (entry, replyTo = null) => ({
+    id: `dc:${entry.id}`, author: entry.author?.login || 'Deleted user', ...decodeMessage(entry.body || ''),
+    time: new Date(entry.createdAt), url: entry.url, replyTo,
+    reactions: (entry.reactionGroups || []).filter((group) => group.users.totalCount > 0).map((group) => REACTION_TYPES[REACTION_ENUMS.indexOf(group.content)]).filter(Boolean),
+  });
+  const chronological = (a, b) => a.time - b.time || String(a.id).localeCompare(String(b.id));
+  async function discussionLabels(entry) {
+    const labels = [...(entry.labels?.nodes || [])];
+    let after = null;
+    let connection = entry.labels;
+    const visited = new Set();
+    while (connection && (after = nextCursor(connection, visited))) {
+      const result = await discussionQuery(`query BlackboardDiscussionLabels($id:ID!,$after:String!) {
+        node(id:$id) { ... on Discussion { labels(first:100,after:$after) { nodes { name color description } pageInfo { hasNextPage endCursor } } } }
+      }`, { id: entry.id, after });
+      connection = result.data?.node?.labels;
+      if (!connection) throw new GitHubError('Could not read discussion tags.');
+      labels.push(...connection.nodes);
+    }
+    return labels;
+  }
+  async function discussion(entry) {
+    if (!entry?.id) throw new GitHubError('Discussion is unavailable.');
+    const labels = await discussionLabels(entry);
+    return { id: `discussion:${entry.id}`, number: entry.number, kind: 'discussion', name: entry.title.startsWith(CHANNEL_PREFIX) ? entry.title.slice(CHANNEL_PREFIX.length) : entry.title,
+      description: entry.body || '', state: entry.closed ? 'closed' : 'open', url: entry.url,
+      parentId: null, milestoneId: null, tags: topicTags(labels), category: entry.category,
+      archived: labels.some((label) => label.name === ARCHIVED_LABEL) };
+  }
+  async function ensureLabel(name) {
+    const path = `/labels/${encodeURIComponent(name)}`;
+    try { return await request(path); }
+    catch (failure) {
+      if (failure.status !== 404) throw failure;
+      try { return await request('/labels', { method: 'POST', body: { name, color: '52769b' } }); }
+      catch (creationFailure) {
+        if (creationFailure.status !== 422) throw creationFailure;
+        return request(path);
+      }
+    }
+  }
+  async function changeDiscussionLabel(id, name, add) {
+    let label;
+    try { label = add ? await ensureLabel(name) : await request(`/labels/${encodeURIComponent(name)}`); }
+    catch (failure) { failure.tagNotApplied = true; throw failure; }
+    if (!label.node_id) throw new GitHubError('Could not identify the tag.');
+    const operation = add ? 'addLabelsToLabelable' : 'removeLabelsFromLabelable';
+    const result = await discussionQuery(`mutation BlackboardDiscussionTag($id:ID!,$labels:[ID!]!) {
+      ${operation}(input:{labelableId:$id,labelIds:$labels}) { labelable { id } }
+    }`, { id: discussionNode(id), labels: [label.node_id] }, true);
+    if (result.data?.[operation]?.labelable?.id !== discussionNode(id)) throw new GitHubError('Tag change unconfirmed. Refresh before trying again.', { uncertain: true });
+    // Do not repeat a confirmed write if the following read fails.
+    try { return (await api.readDiscussion(id)).tags; }
+    catch (failure) { failure.uncertain = true; throw failure; }
+  }
+  async function discussionState(id, closed) {
+    const operation = closed ? 'closeDiscussion' : 'reopenDiscussion';
+    const result = await discussionQuery(`mutation BlackboardDiscussionState($id:ID!) {
+      ${operation}(input:{discussionId:$id${closed ? ',reason:RESOLVED' : ''}}) { discussion { ${discussionFields} } }
+    }`, { id: discussionNode(id) }, true);
+    const entry = result.data?.[operation]?.discussion;
+    if (entry?.id !== discussionNode(id)) throw new GitHubError('Discussion change unconfirmed. Refresh before trying again.', { uncertain: true });
+    return discussion(entry);
+  }
   function nodeId(id) {
     if (typeof id !== 'string' || !/^[A-Za-z0-9_=-]{1,256}$/.test(id)) throw new GitHubError('Invalid project identifier.');
     return id;
@@ -266,6 +341,80 @@ export function createGitHubClient({
   }
 
   const api = {
+    async listDiscussions({ includeClosed = false, includeArchived = false } = {}) {
+      const entries = [], visited = new Set();
+      let after = null;
+      do {
+        const result = await discussionQuery(`query BlackboardDiscussions($owner:String!,$repo:String!,$after:String) {
+          repository(owner:$owner,name:$repo) { hasDiscussionsEnabled discussions(first:100,after:$after,orderBy:{field:CREATED_AT,direction:ASC}) {
+            nodes { ${discussionFields} } pageInfo { hasNextPage endCursor }
+          } }
+        }`, { owner, repo, after });
+        const repository = result.data?.repository;
+        if (repository?.hasDiscussionsEnabled === false) return [];
+        if (!repository?.discussions) throw new GitHubError('Could not read discussions. Check the token’s Discussions permission.');
+        for (const entry of repository.discussions.nodes.filter(Boolean)) entries.push(await discussion(entry));
+        after = nextCursor(repository.discussions, visited);
+      } while (after);
+      return entries.filter((item) => (includeClosed || item.state === 'open') && (includeArchived || !item.archived));
+    },
+    async readDiscussion(id) {
+      const result = await discussionQuery(`query BlackboardDiscussion($id:ID!) { node(id:$id) { ... on Discussion { ${discussionFields} } } }`, { id: discussionNode(id) });
+      return discussion(result.data?.node);
+    },
+    async createDiscussion({ name, topic = '' }) {
+      if (!name.trim()) throw new GitHubError('A topic name is required.');
+      let repositoryId, categoryId, after = null;
+      const visited = new Set();
+      do {
+        const result = await discussionQuery(`query BlackboardDiscussionCategory($owner:String!,$repo:String!,$after:String) {
+          repository(owner:$owner,name:$repo) { id discussionCategories(first:100,after:$after) { nodes { id name } pageInfo { hasNextPage endCursor } } }
+        }`, { owner, repo, after });
+        const repository = result.data?.repository;
+        if (!repository?.discussionCategories) throw new GitHubError('Enable Discussions on GitHub and check the token’s Discussions permission.');
+        repositoryId = repository.id;
+        categoryId = repository.discussionCategories.nodes.find((category) => category?.name.toLowerCase() === 'general')?.id;
+        after = categoryId ? null : nextCursor(repository.discussionCategories, visited);
+      } while (after);
+      if (!categoryId) throw new GitHubError('Create a General discussion category on GitHub first.');
+      const result = await discussionQuery(`mutation BlackboardCreateDiscussion($repository:ID!,$category:ID!,$title:String!,$body:String!) {
+        createDiscussion(input:{repositoryId:$repository,categoryId:$category,title:$title,body:$body}) { discussion { ${discussionFields} } }
+      }`, { repository: repositoryId, category: categoryId, title: name.trim(), body: topic.trim() ? topic : 'Start the conversation here.' }, true);
+      if (!result.data?.createDiscussion?.discussion?.id) throw new GitHubError('Discussion creation unconfirmed. Check GitHub before trying again.', { uncertain: true });
+      return discussion(result.data.createDiscussion.discussion);
+    },
+    async readDiscussionMessages(id) {
+      const entries = [], visited = new Set();
+      let after = null;
+      do {
+        const result = await discussionQuery(`query BlackboardDiscussionComments($id:ID!,$after:String) {
+          node(id:$id) { ... on Discussion { comments(first:100,after:$after) {
+            nodes { ${commentFields} replies(first:100) { nodes { ${commentFields} } pageInfo { hasNextPage endCursor } } }
+            pageInfo { hasNextPage endCursor }
+          } } }
+        }`, { id: discussionNode(id), after });
+        const connection = result.data?.node?.comments;
+        if (!connection) throw new GitHubError('Could not read discussion messages.');
+        for (const entry of connection.nodes.filter(Boolean)) {
+          entries.push(discussionMessage(entry));
+          const reference = { id: `dc:${entry.id}`, author: decodeMessage(entry.body || '').sender || entry.author?.login || 'Deleted user', url: entry.url };
+          let replies = entry.replies;
+          const replyCursors = new Set();
+          while (replies) {
+            entries.push(...replies.nodes.filter(Boolean).map((reply) => discussionMessage(reply, reference)));
+            const cursor = nextCursor(replies, replyCursors);
+            if (!cursor) break;
+            const more = await discussionQuery(`query BlackboardDiscussionReplies($id:ID!,$after:String!) {
+              node(id:$id) { ... on DiscussionComment { replies(first:100,after:$after) { nodes { ${commentFields} } pageInfo { hasNextPage endCursor } } } }
+            }`, { id: entry.id, after: cursor });
+            replies = more.data?.node?.replies;
+            if (!replies) throw new GitHubError('Could not read discussion replies.');
+          }
+        }
+        after = nextCursor(connection, visited);
+      } while (after);
+      return [...new Map(entries.map((entry) => [entry.id, entry])).values()].sort(chronological);
+    },
     async listProjectViews(projectId) {
       nodeId(projectId);
       const views = [], visited = new Set();
@@ -530,6 +679,7 @@ export function createGitHubClient({
         .sort((a, b) => a.name.localeCompare(b.name));
     },
     async addChannelTag(id, name) {
+      if (isDiscussionId(id)) return changeDiscussionLabel(id, tagName(name), true);
       const path = issuePath(id);
       name = tagName(name);
       const current = await request(path);
@@ -550,6 +700,7 @@ export function createGitHubClient({
       return topicTags(await request(`${path}/labels`, { method: 'POST', body: { labels: [label.name] } }));
     },
     async removeChannelTag(id, name) {
+      if (isDiscussionId(id)) return changeDiscussionLabel(id, tagName(name), false);
       const path = issuePath(id);
       name = tagName(name);
       const current = await request(path);
@@ -596,13 +747,48 @@ export function createGitHubClient({
       return viewerPromise;
     },
     async listReactions(commentId) {
+      if (typeof commentId === 'string' && commentId.startsWith('dc:')) {
+        const entries = [], visited = new Set();
+        let after = null;
+        do {
+          const result = await discussionQuery(`query BlackboardDiscussionReactions($id:ID!,$after:String) {
+            node(id:$id) { ... on DiscussionComment { reactions(first:100,after:$after) { nodes { id content user { login } } pageInfo { hasNextPage endCursor } } } }
+          }`, { id: nodeId(commentId.slice(3)), after });
+          const connection = result.data?.node?.reactions;
+          if (!connection) throw new GitHubError('Could not read reactions.');
+          entries.push(...connection.nodes.filter(Boolean).map((entry) => ({ id: entry.id, type: REACTION_TYPES[REACTION_ENUMS.indexOf(entry.content)], author: entry.user?.login || 'Deleted user' })));
+          after = nextCursor(connection, visited);
+        } while (after);
+        return entries;
+      }
       return (await listAll(reactionPath(commentId))).map(reaction);
     },
     async addReaction(commentId, type) {
       if (!REACTION_TYPES.includes(type)) throw new GitHubError('Unsupported reaction.');
+      if (typeof commentId === 'string' && commentId.startsWith('dc:')) {
+        const result = await discussionQuery(`mutation BlackboardDiscussionReact($id:ID!,$content:ReactionContent!) {
+          addReaction(input:{subjectId:$id,content:$content}) { reaction { id content user { login } } }
+        }`, { id: nodeId(commentId.slice(3)), content: REACTION_ENUMS[REACTION_TYPES.indexOf(type)] }, true);
+        const entry = result.data?.addReaction?.reaction;
+        if (!entry?.id) throw new GitHubError('Reaction unconfirmed. Refresh before trying again.', { uncertain: true });
+        return { id: entry.id, type, author: entry.user?.login || 'Deleted user' };
+      }
       return reaction(await request(reactionPath(commentId), { method: 'POST', body: { content: type } }));
     },
     async removeReaction(commentId, reactionId) {
+      if (typeof commentId === 'string' && commentId.startsWith('dc:')) {
+        const entries = await api.listReactions(commentId);
+        // The UI passes an owned reaction ID; resolve its type again before removal.
+        const viewer = await api.getViewer();
+        const own = entries.find((entry) => entry.id === reactionId && entry.author === viewer);
+        if (!own) throw new GitHubError('Your reaction is no longer present. Refresh before trying again.');
+        const id = nodeId(commentId.slice(3));
+        const result = await discussionQuery(`mutation BlackboardDiscussionUnreact($id:ID!,$content:ReactionContent!) {
+          removeReaction(input:{subjectId:$id,content:$content}) { subject { id } }
+        }`, { id, content: REACTION_ENUMS[REACTION_TYPES.indexOf(own.type)] }, true);
+        if (result.data?.removeReaction?.subject?.id !== id) throw new GitHubError('Reaction removal unconfirmed. Refresh before trying again.', { uncertain: true });
+        return;
+      }
       const path = reactionPath(commentId);
       if (!Number.isSafeInteger(reactionId) || reactionId < 1) throw new GitHubError('Invalid reaction ID.');
       await request(`${path}/${reactionId}`, { method: 'DELETE' });
@@ -640,12 +826,15 @@ export function createGitHubClient({
       return { ...channel(created), parentId };
     },
     async closeChannel(id) {
+      if (isDiscussionId(id)) return discussionState(id, true);
       return channel(await request(issuePath(id), { method: 'PATCH', body: { state: 'closed', state_reason: 'not_planned' } }));
     },
     async reopenChannel(id) {
+      if (isDiscussionId(id)) return discussionState(id, false);
       return channel(await request(issuePath(id), { method: 'PATCH', body: { state: 'open' } }));
     },
     async closeChannelTree(id, onChange = () => {}) {
+      if (isDiscussionId(id)) { onChange(await api.closeChannel(id)); return; }
       const tree = await topicTree(id);
       for (const item of tree) {
         try {
@@ -655,6 +844,7 @@ export function createGitHubClient({
       }
     },
     async archiveChannelTree(id, onChange = () => {}) {
+      if (isDiscussionId(id)) { await api.archiveChannel(id); onChange({ id, archived: true }); return; }
       const tree = await topicTree(id);
       for (const item of tree) {
         try {
@@ -664,6 +854,7 @@ export function createGitHubClient({
       }
     },
     async archiveChannel(id) {
+      if (isDiscussionId(id)) { await changeDiscussionLabel(id, ARCHIVED_LABEL, true); return { id, archived: true }; }
       const path = issuePath(id);
       const labelPath = `/labels/${encodeURIComponent(ARCHIVED_LABEL)}`;
       try {
@@ -683,6 +874,13 @@ export function createGitHubClient({
       return { id, archived: true };
     },
     async deleteChannel(id) {
+      if (isDiscussionId(id)) {
+        const result = await discussionQuery(`mutation BlackboardDeleteDiscussion($id:ID!) {
+          deleteDiscussion(input:{id:$id}) { discussion { id } }
+        }`, { id: discussionNode(id) }, true);
+        if (result.data?.deleteDiscussion?.discussion?.id !== discussionNode(id)) throw new GitHubError('Deletion unconfirmed. Check GitHub before trying again.', { uncertain: true });
+        return { id, deleted: true };
+      }
       const issue = await request(issuePath(id));
       if (issue.pull_request || !issue.title.startsWith(CHANNEL_PREFIX) || !issue.node_id) {
         throw new GitHubError('Only Blackboard topic issues can be deleted.');
@@ -697,6 +895,7 @@ export function createGitHubClient({
       return { id, deleted: true };
     },
     async deleteChannelPreservingChildren(id, onChange = () => {}) {
+      if (isDiscussionId(id)) return api.deleteChannel(id);
       const parent = await request(issuePath(id));
       if (!isTopic(parent)) throw new GitHubError('Only Blackboard topics can be deleted.');
       const children = await subIssues(id);
@@ -711,10 +910,19 @@ export function createGitHubClient({
     // Initial implementation returns a complete paginated snapshot. Polling
     // replaces the snapshot; comment IDs prevent duplicates. Cursor reads follow.
     async readMessages(id) {
+      if (isDiscussionId(id)) return api.readDiscussionMessages(id);
       return (await listAll(`${issuePath(id)}/comments`)).map(message);
     },
     async sendMessage(id, text, { sender = null } = {}) {
       if (!text.trim()) throw new GitHubError('A message is required.');
+      if (isDiscussionId(id)) {
+        const result = await discussionQuery(`mutation BlackboardDiscussionSend($id:ID!,$body:String!) {
+          addDiscussionComment(input:{discussionId:$id,body:$body}) { comment { ${commentFields} } }
+        }`, { id: discussionNode(id), body: encodeMessage(text, sender) }, true);
+        const entry = result.data?.addDiscussionComment?.comment;
+        if (!entry?.id) throw new GitHubError('Message delivery unconfirmed. Check GitHub before resending.', { uncertain: true });
+        return discussionMessage(entry);
+      }
       return message(await request(`${issuePath(id)}/comments`, { method: 'POST', body: { body: encodeMessage(text, sender) } }));
     },
   };
