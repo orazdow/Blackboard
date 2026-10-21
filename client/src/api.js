@@ -168,11 +168,24 @@ export function createGitHubClient({
     return results;
   }
 
+  const tag = (label) => ({
+    name: typeof label === 'string' ? label : label.name,
+    color: typeof label !== 'string' && /^[0-9a-f]{6}$/i.test(label.color) ? label.color : '52769b',
+    description: typeof label === 'string' ? '' : label.description || '',
+  });
+  const topicTags = (labels) => labels.map(tag).filter((item) => item.name.toLowerCase() !== ARCHIVED_LABEL.toLowerCase());
+  const tagName = (name) => {
+    if (typeof name !== 'string' || !name.trim() || name.trim().length > 50 || /[\x00-\x1f\x7f]/.test(name)) throw new GitHubError('Tag names must contain 1–50 characters.');
+    const trimmed = name.trim();
+    if (trimmed.toLowerCase() === ARCHIVED_LABEL.toLowerCase()) throw new GitHubError('Use Archive to archive a topic.');
+    return trimmed;
+  };
   const channel = (issue) => ({
     id: issue.number, name: issue.title.slice(CHANNEL_PREFIX.length),
     description: issue.body || '', state: issue.state, url: issue.html_url,
     parentId: null,
     milestoneId: issue.milestone?.number ?? null,
+    tags: topicTags(issue.labels || []),
     archived: (issue.labels || []).some((label) => (typeof label === 'string' ? label : label.name) === ARCHIVED_LABEL),
   });
   const message = (comment) => ({
@@ -232,6 +245,40 @@ export function createGitHubClient({
   }
 
   const api = {
+    async listTags() {
+      // Suggest only names in use, rather than GitHub's unused default labels.
+      const issues = await listAll('/issues?state=all&sort=created&direction=asc');
+      const tags = topicTags(issues.flatMap((issue) => issue.labels || []).filter((item) => !item.archived_at));
+      return [...new Map(tags.map((tag) => [tag.name.toLowerCase(), tag])).values()]
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+    async addChannelTag(id, name) {
+      const path = issuePath(id);
+      name = tagName(name);
+      const current = await request(path);
+      if (!isTopic(current)) throw new GitHubError('Only Blackboard topics can be tagged.');
+      let label;
+      try {
+        const labelPath = `/labels/${encodeURIComponent(name)}`;
+        try { label = await request(labelPath); }
+        catch (failure) {
+          if (failure.status !== 404) throw failure;
+          try { label = await request('/labels', { method: 'POST', body: { name, color: '52769b' } }); }
+          catch (creationFailure) {
+            if (creationFailure.status !== 422) throw creationFailure;
+            label = await request(labelPath); // Another client may have created it.
+          }
+        }
+      } catch (failure) { failure.tagNotApplied = true; throw failure; }
+      return topicTags(await request(`${path}/labels`, { method: 'POST', body: { labels: [label.name] } }));
+    },
+    async removeChannelTag(id, name) {
+      const path = issuePath(id);
+      name = tagName(name);
+      const current = await request(path);
+      if (!isTopic(current)) throw new GitHubError('Only Blackboard topics can be tagged.');
+      return topicTags(await request(`${path}/labels/${encodeURIComponent(name)}`, { method: 'DELETE' }));
+    },
     async listMilestones({ includeClosed = false } = {}) {
       return (await listAll(`/milestones?state=${includeClosed ? 'all' : 'open'}&sort=due_on&direction=asc`)).map(milestone);
     },

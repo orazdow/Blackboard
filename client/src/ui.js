@@ -37,6 +37,10 @@ export default function App() {
   const topicTracker = createTopicTracker();
   const milestoneTracker = createMilestoneTracker();
   const [topics, setTopics] = createSignal([]);
+  const [knownTags, setKnownTags] = createSignal([]);
+  const [tagEditing, setTagEditing] = createSignal(null);
+  const [tagDrafts, setTagDrafts] = createSignal({});
+  const [tagOperations, setTagOperations] = createSignal({});
   const [milestones, setMilestones] = createSignal([]);
   const [milestonesLoaded, setMilestonesLoaded] = createSignal(false);
   const [activeMilestoneId, setActiveMilestoneId] = createSignal(savedMilestone());
@@ -104,6 +108,12 @@ export default function App() {
     : syncFailed() ? 'GitHub sync failed; waiting to retry'
     : lastSync() ? `Last synced ${lastSync().toLocaleString()}` : 'Waiting to sync with GitHub';
   const topic = () => topics().find((item) => item.id === activeId());
+  const displayedTags = () => {
+    const tags = topic()?.tags || [];
+    const operation = tagOperations()[activeId()];
+    return operation?.target === 'add' && !tags.some((tag) => tag.name.toLowerCase() === operation.name.toLowerCase())
+      ? [...tags, { name: operation.name, color: '52769b', description: '' }] : tags;
+  };
   const topicMilestoneLabel = () => {
     const id = topic()?.milestoneId;
     return id ? milestones().find((item) => item.id === id)?.name || `Milestone #${id}` : 'Milestones';
@@ -161,12 +171,17 @@ export default function App() {
     setSyncing(true);
     try {
       const revision = channelRevision;
-      const allChannels = await api.listChannels({ includeClosed: true, includeArchived: true, includeHierarchy: true });
+      // These share the issue-list requests, including pagination and conditional reads.
+      const [allChannels, incomingTags] = await Promise.all([
+        api.listChannels({ includeClosed: true, includeArchived: true, includeHierarchy: true }),
+        api.listTags(),
+      ]);
       if (stopped) return;
       if (revision === channelRevision) {
         batch(() => {
           const channels = topicTracker.reconcile(allChannels).filter((item) => !item.archived);
           setTopics(channels);
+          setKnownTags([...new Map([...incomingTags, ...channels.flatMap((item) => item.tags)].map((tag) => [tag.name.toLowerCase(), tag])).values()]);
           if (!channels.some((item) => item.id === activeId())) {
             setActiveId((channels.find((item) => item.state === 'open') || channels[0])?.id ?? null);
           }
@@ -181,6 +196,13 @@ export default function App() {
               if (statusChange()?.id === id) statusDialog.close();
               if (removeTarget()?.id === id) removeDialog.close();
             }
+          }
+          for (const [key, operation] of Object.entries(tagOperations())) {
+            if (operation?.status !== 'unconfirmed') continue;
+            const item = allChannels.find((entry) => entry.id === Number(key));
+            if (!item) continue;
+            const present = item.tags.some((tag) => tag.name.toLowerCase() === operation.name.toLowerCase());
+            if (present === (operation.target === 'add')) setTagOperations((previous) => ({ ...previous, [key]: null }));
           }
         });
       }
@@ -222,6 +244,7 @@ export default function App() {
   }
 
   async function selectTopic(id) {
+    setTagEditing(null);
     setActiveMilestoneId(null);
     setCollapsedTopics((previous) => {
       const next = new Set(previous);
@@ -239,7 +262,44 @@ export default function App() {
   }
 
   function selectMilestone(id) {
+    setTagEditing(null);
     setActiveMilestoneId(id);
+  }
+
+  function startTag() {
+    const id = activeId();
+    if (tagOperations()[id]) return;
+    setTagEditing(id);
+  }
+
+  async function changeTag(id, name, target) {
+    name = name.trim();
+    if (!name || tagOperations()[id]) return;
+    if (target === 'add' && topics().find((item) => item.id === id)?.tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
+      setTagEditing(null);
+      setTagDrafts((previous) => ({ ...previous, [id]: '' }));
+      return;
+    }
+    setTagOperations((previous) => ({ ...previous, [id]: { name, target, status: 'pending' } }));
+    if (target === 'add') {
+      setTagEditing(null);
+      setTagDrafts((previous) => ({ ...previous, [id]: '' }));
+    }
+    try {
+      const tags = await (target === 'add' ? api.addChannelTag(id, name) : api.removeChannelTag(id, name));
+      rememberChange({ id, tags });
+      setKnownTags((previous) => [...new Map([...previous, ...tags].map((tag) => [tag.name.toLowerCase(), tag])).values()]);
+      setTagOperations((previous) => ({ ...previous, [id]: null }));
+      refresh();
+    } catch (failure) {
+      const unconfirmed = failure.uncertain && !failure.tagNotApplied;
+      setTagOperations((previous) => ({ ...previous, [id]: unconfirmed ? { name, target, status: 'unconfirmed' } : null }));
+      if (target === 'add' && !unconfirmed) {
+        setTagDrafts((previous) => ({ ...previous, [id]: name }));
+        if (activeId() === id && activeMilestoneId() === null) setTagEditing(id);
+      }
+      setError(failure.message);
+    }
   }
 
   function rememberMilestone(item) {
@@ -752,6 +812,30 @@ export default function App() {
             onClick={() => requestStatusChange(topic())}>
             <span class="topic-status-dot" aria-hidden="true" />{statusLabel(topic().id) || (topic().state === 'open' ? 'Open' : 'Closed')}
           </button>
+        </div>
+        <div class="topic-tags" aria-label="Topic tags">
+          <For each={displayedTags()}>{(tag) => (
+            <span class="topic-tag" classList={{ 'is-pending': tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase() }}
+              aria-busy={tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase()} title={tag.description || tag.name}>
+              <span class="topic-tag-dot" style={{ background: `#${tag.color}` }} aria-hidden="true" />
+              <span class="topic-tag-name">{tag.name}</span>
+              <button type="button" disabled={Boolean(tagOperations()[topic().id])} onClick={() => changeTag(topic().id, tag.name, 'remove')}
+                aria-label={`Remove tag ${tag.name}`} title={`Remove tag ${tag.name}`}>×</button>
+            </span>
+          )}</For>
+          <Show when={tagEditing() === topic().id} fallback={
+            <button type="button" class="add-tag-button" disabled={Boolean(tagOperations()[topic().id]) || !isConfigured} onClick={startTag}>+ Tag</button>
+          }>
+            <form class="topic-tag-form" aria-label="Add topic tag" onSubmit={(event) => { event.preventDefault(); changeTag(topic().id, tagDrafts()[topic().id] || '', 'add'); }}
+              onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); setTagEditing(null); } }}>
+              <input type="text" aria-label="Tag name" placeholder="Tag name" list="topic-tag-suggestions" maxLength="50" required
+                ref={(element) => requestAnimationFrame(() => element.focus())} value={tagDrafts()[topic().id] || ''}
+                onInput={(event) => setTagDrafts((previous) => ({ ...previous, [topic().id]: event.currentTarget.value }))} />
+              <datalist id="topic-tag-suggestions"><For each={knownTags().filter((tag) => !topic().tags.some((entry) => entry.name.toLowerCase() === tag.name.toLowerCase()))}>{(tag) => <option value={tag.name} />}</For></datalist>
+              <button type="submit" disabled={!(tagDrafts()[topic().id] || '').trim()}>Add</button>
+              <button type="button" aria-label="Cancel tag" onClick={() => setTagEditing(null)}>×</button>
+            </form>
+          </Show>
         </div>
         <div ref={messageList} class="message-list" role="log" aria-label="Messages" aria-live="polite" aria-relevant="additions">
           <div class="conversation-start">

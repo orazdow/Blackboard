@@ -38,6 +38,11 @@ the REST API, or the ESM client in `client/src/api.js`.
 - Milestone membership is explicit per topic; it does not cascade to subtopics.
   Completion uses GitHub's counts of closed versus total assigned issues and pull requests.
   Closing a milestone does not close its topics.
+- Topic tags are GitHub labels. Reuse existing names or create a repository label
+  before applying it. Removing a tag from a topic must not delete the repository label.
+  The `blackboard:archived` label is reserved for the Archive operation.
+  The client suggests only labels currently used on repository issues or pull requests;
+  unused labels, including GitHub's defaults, are omitted.
 
 ## Operations
 
@@ -60,6 +65,10 @@ provided by your environment; reading this repository does not grant access.
 | Create milestone | `POST /milestones` | `{"title":"First release","description":"Goal"}`; optional `due_on` ISO date/time. |
 | Update milestone | `PATCH /milestones/{number}` | Set `title`, `description`, `due_on` (null clears), or `state` (`open`/`closed`). |
 | Assign milestone | `PATCH /issues/{number}` | `{"milestone":1}` uses milestone number; null removes membership. |
+| List suggested tags | `GET /issues?state=all&per_page=100` | Collect used labels, deduplicate names, and omit `blackboard:archived`. Follow pagination. |
+| Create tag | `POST /labels` | `{"name":"design","color":"52769b"}`. |
+| Apply tag | `POST /issues/{number}/labels` | `{"labels":["design"]}` adds without replacing other labels. |
+| Remove topic tag | `DELETE /issues/{number}/labels/{name}` | URL-encode the name; preserves the repository label. |
 
 Follow pagination when listing topics too. If polling, deduplicate by comment
 ID, respect rate limits, and back off after failures. If a write times out, check

@@ -239,6 +239,19 @@ textarea::placeholder {
 .topic-status.is-closed:hover:not(:disabled) { background: #3a3050; }
 .topic-status-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
 .chat-topic-controls { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-4) var(--space-8) 0; }
+.topic-tags { display: flex; align-items: center; flex-wrap: wrap; flex-shrink: 0; gap: var(--space-2); padding: var(--space-2) var(--space-8) 0; }
+.topic-tag { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 2px 6px 2px 8px; border: 1px solid #2c4059; border-radius: 5px; background: #14283e; color: #b6c9df; font-size: 0.75rem; }
+.topic-tag-dot { flex: 0 0 5px; height: 5px; border-radius: 50%; }
+.topic-tag-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-tag button { display: grid; place-items: center; width: 16px; height: 18px; padding: 0; background: transparent; color: var(--color-muted); font-size: 0.9rem; opacity: 0.5; }
+.topic-tag:hover button, .topic-tag:focus-within button { opacity: 1; }
+.topic-tag button:hover:not(:disabled) { background: #29415b; color: var(--color-text); }
+.add-tag-button { padding: 3px 7px; background: transparent; color: var(--color-muted); font-size: 0.75rem; }
+.add-tag-button:hover:not(:disabled) { background: #1a2e40; color: var(--color-text); }
+.topic-tag-form { display: flex; align-items: center; gap: var(--space-1); max-width: 100%; }
+.topic-tag-form input { width: 10rem; min-width: 0; padding: 3px 7px; font-size: 0.75rem; }
+.topic-tag-form button { padding: 3px 7px; background: #1a2e40; color: var(--color-text); font-size: 0.75rem; }
+.topic-tag-form button:hover:not(:disabled) { background: #29415b; }
 
 /* Topic status confirmation */
 .topic-status-dialog { width: min(420px, calc(100% - var(--space-8))); max-height: calc(100dvh - var(--space-8)); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: 12px; color: var(--color-text); background: #132332; box-shadow: 0 24px 80px #0008; }
@@ -303,6 +316,7 @@ textarea::placeholder {
   .chat-header h2 { padding-right: 6rem; }
   .chat-header-actions { right: var(--space-4); top: var(--space-4); }
   .chat-topic-controls { padding: var(--space-3) var(--space-4) 0; }
+  .topic-tags { padding: var(--space-2) var(--space-4) 0; }
   .chat-header p { padding: 0; }
   .preview-badge { display: none; }
   .composer { padding: var(--space-3); }

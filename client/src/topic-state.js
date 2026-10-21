@@ -1,4 +1,5 @@
 // Keep acknowledged local changes visible until GitHub's list catches up.
+const sameTags = (a = [], b = []) => a.length === b.length && a.every((tag) => b.some((other) => other.name.toLowerCase() === tag.name.toLowerCase()));
 export function createTopicTracker() {
   const changes = new Map();
   return {
@@ -17,7 +18,7 @@ export function createTopicTracker() {
         if (desired === null) {
           if (!actual) changes.delete(id);
           merged.delete(id);
-        } else if (actual && actual.name === desired.name && actual.state === desired.state && actual.archived === desired.archived && (actual.parentId ?? null) === (desired.parentId ?? null) && (actual.milestoneId ?? null) === (desired.milestoneId ?? null)) {
+        } else if (actual && actual.name === desired.name && actual.state === desired.state && actual.archived === desired.archived && (actual.parentId ?? null) === (desired.parentId ?? null) && (actual.milestoneId ?? null) === (desired.milestoneId ?? null) && sameTags(actual.tags, desired.tags)) {
           changes.delete(id);
         } else {
           merged.set(id, desired);
