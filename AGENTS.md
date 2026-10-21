@@ -94,3 +94,8 @@ card removes its project membership and must not delete the underlying issue.
 Column edits update Status options; preserve existing option IDs when updating
 the options array so unrelated cards retain their statuses. Deleting a status
 column leaves its cards unassigned rather than deleting them.
+Project views share the same items. Saved Board/Table views store their names,
+layouts, and GitHub filter expressions; deleting a view preserves all items.
+Evaluate filters on GitHub rather than approximating their syntax in the client.
+The table currently shows Title, Status, Repository, and Type. Custom visible
+fields, grouping/sorting configuration, and Roadmap rendering remain unimplemented.

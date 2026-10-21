@@ -266,6 +266,80 @@ export function createGitHubClient({
   }
 
   const api = {
+    async listProjectViews(projectId) {
+      nodeId(projectId);
+      const views = [], visited = new Set();
+      let after = null;
+      do {
+        const result = await projectQuery(`query BlackboardProjectViews($id:ID!,$after:String) {
+          node(id:$id) { ... on ProjectV2 { views(first:100,after:$after) {
+            nodes { id number name layout filter } pageInfo { hasNextPage endCursor }
+          } } }
+        }`, { id: projectId, after });
+        const connection = result.data?.node?.views;
+        if (!connection) throw new GitHubError('Could not read project views.');
+        views.push(...connection.nodes.filter(Boolean));
+        after = nextCursor(connection, visited);
+      } while (after);
+      return views;
+    },
+    async projectViewItemIds(projectId, filter) {
+      nodeId(projectId);
+      const ids = [], visited = new Set();
+      let after = null;
+      do {
+        const result = await projectQuery(`query BlackboardViewItems($id:ID!,$filter:String!,$after:String) {
+          node(id:$id) { ... on ProjectV2 { items(first:100,after:$after,query:$filter) {
+            nodes { id isArchived } pageInfo { hasNextPage endCursor }
+          } } }
+        }`, { id: projectId, filter, after });
+        const connection = result.data?.node?.items;
+        if (!connection) throw new GitHubError('Could not apply the view filter.');
+        ids.push(...connection.nodes.filter((item) => item && !item.isArchived).map((item) => item.id));
+        after = nextCursor(connection, visited);
+      } while (after);
+      return ids;
+    },
+    async createProjectView(projectId, { name, layout = 'BOARD_LAYOUT', filter = '' }) {
+      nodeId(projectId);
+      if (!['BOARD_LAYOUT', 'TABLE_LAYOUT'].includes(layout) || typeof name !== 'string' || !name.trim()) throw new GitHubError('Choose a view name and a Board or Table layout.');
+      const result = await projectQuery(`mutation BlackboardCreateView($project:ID!,$name:String!,$layout:ProjectV2ViewLayout!) {
+        createProjectV2View(input:{projectId:$project,name:$name,layout:$layout}) { projectV2View { id number name layout filter } }
+      }`, { project: projectId, name: name.trim(), layout }, true);
+      const view = result.data?.createProjectV2View?.projectV2View;
+      if (!view?.id) throw new GitHubError('GitHub did not confirm view creation. Refresh before trying again.', { uncertain: true });
+      if (filter.trim()) {
+        try { return await api.updateProjectView(view.id, { filter }); }
+        catch (failure) { failure.createdView = view; throw failure; }
+      }
+      return view;
+    },
+    async updateProjectView(viewId, changes) {
+      nodeId(viewId);
+      const input = { viewId };
+      if (changes.name !== undefined) {
+        if (typeof changes.name !== 'string' || !changes.name.trim()) throw new GitHubError('A view name is required.');
+        input.name = changes.name.trim();
+      }
+      if (changes.layout !== undefined) {
+        if (!['BOARD_LAYOUT', 'TABLE_LAYOUT'].includes(changes.layout)) throw new GitHubError('Choose Board or Table.');
+        input.layout = changes.layout;
+      }
+      if (changes.filter !== undefined) input.filter = changes.filter.trim();
+      const result = await projectQuery(`mutation BlackboardUpdateView($input:UpdateProjectV2ViewInput!) {
+        updateProjectV2View(input:$input) { projectV2View { id number name layout filter } }
+      }`, { input }, true);
+      const view = result.data?.updateProjectV2View?.projectV2View;
+      if (view?.id !== viewId) throw new GitHubError('GitHub did not confirm the view update. Refresh before trying again.', { uncertain: true });
+      return view;
+    },
+    async deleteProjectView(viewId) {
+      nodeId(viewId);
+      const result = await projectQuery(`mutation BlackboardDeleteView($id:ID!) {
+        deleteProjectV2View(input:{viewId:$id}) { projectV2View { id } }
+      }`, { id: viewId }, true);
+      if (result.data?.deleteProjectV2View?.projectV2View?.id !== viewId) throw new GitHubError('GitHub did not confirm view deletion. Refresh before trying again.', { uncertain: true });
+    },
     async listProjects() {
       const projects = [];
       const visited = new Set();

@@ -182,6 +182,23 @@ textarea::placeholder {
 .project-list-item small { font-size: 0.65rem; }
 .sidebar-section-panel .project-sidebar-error { color: #f1c6a7; overflow-wrap: anywhere; }
 .project-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.project-views { display: flex; align-items: center; flex-shrink: 0; gap: var(--space-2); overflow-x: auto; padding: var(--space-2) var(--space-8) 0; border-bottom: 1px solid var(--color-border); }
+.project-view-tab { display: flex; align-items: center; flex-shrink: 0; border-bottom: 2px solid transparent; }
+.project-view-tab.is-active { border-bottom-color: var(--color-accent); }
+.project-view-tab > button { padding: var(--space-2); border-radius: 4px 4px 0 0; background: transparent; color: var(--color-muted); font-size: 0.8rem; }
+.project-view-tab.is-active > button { color: var(--color-text); }
+.project-view-tab > button:hover:not(:disabled) { background: #20374f; }
+.project-views > .project-menu > summary { width: auto; padding: 0 var(--space-2); font-size: 0.8rem; white-space: nowrap; }
+.project-table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-8) var(--space-6); }
+.project-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.8rem; }
+.project-table th { position: sticky; top: 0; z-index: 1; background: #132332; color: var(--color-muted); font-weight: 500; }
+.project-table th, .project-table td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+.project-table tr:hover td { background: #13273d; }
+.project-table td:first-child { min-width: 180px; width: 50%; }
+.project-table td:not(:first-child) { color: var(--color-muted); }
+.project-table select { max-width: 12rem; padding: var(--space-1); border: 1px solid var(--color-border); border-radius: 4px; background: #132332; color: var(--color-text); font: inherit; }
+.project-saved-filter { font-size: 0.75rem; }
+.project-filter-help { margin: 0; font-size: 0.75rem; }
 .project-toolbar { display: flex; align-items: center; flex-wrap: wrap; flex-shrink: 0; gap: var(--space-3); padding: var(--space-4) var(--space-8); }
 .project-view-label { padding: var(--space-1) var(--space-3); border-bottom: 2px solid var(--color-accent); color: var(--color-text); font-size: 0.85rem; }
 .project-toolbar input { width: 12rem; min-width: 0; max-width: 100%; font-size: 0.8rem; }
