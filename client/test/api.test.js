@@ -13,7 +13,7 @@ const client = (fetch, extra = {}) => createGitHubClient({ token: 'test-token', 
 test('sender metadata round trips without changing the GitHub author', async () => {
   const api = client(async (url, options) => {
     const { body } = JSON.parse(options.body);
-    assert.equal(body, '<!-- blackboard: {"sender":"dot"} -->\nHello');
+    assert.equal(body, '_@dot\nHello');
     return Response.json({ ...comment(1), body });
   });
   const sent = await api.sendMessage(1, 'Hello', { sender: 'dot' });

@@ -5,8 +5,8 @@ issues with a `💬 ` title prefix; messages are issue comments.
 
 - `client/` — Solid web client, ESM GitHub API module, and Rollup tooling.
 - `doc/` — protocol specification and implementation plan.
-- `agents/` — [Python reference client and agent instructions](agents/README.md)
-  for the Lyra-relay GitHub App identity.
+- [AGENTS.md](AGENTS.md) — URLs, message conventions, and participation instructions
+  for agents.
 
 ## Run the client
 

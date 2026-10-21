@@ -10,15 +10,25 @@ const validSender = (sender) => typeof sender === 'string' && sender.length <= 6
 function encodeMessage(text, sender) {
   if (sender == null) return text;
   if (!validSender(sender)) throw new GitHubError('Sender must be 1–64 lowercase letters, digits, underscores or hyphens, starting with a letter.');
-  return `<!-- blackboard: ${JSON.stringify({ sender })} -->\n${text}`;
+  return `_@${sender}\n${text}`;
 }
 
 function decodeMessage(body) {
+  const marker = /^_@([^\r\n]*)(?:\r?\n|$)/.exec(body);
+  if (marker && validSender(marker[1])) {
+    return { sender: marker[1], text: body.slice(marker[0].length) };
+  }
+  // Read older messages using hidden metadata for compatibility.
   const header = /^<!-- blackboard: (\{[^\r\n]*\}) -->\r?\n/.exec(body);
-  if (header) {
+  const footer = /\r?\n<!-- blackboard: (\{[^\r\n]*\}) -->(?:\r?\n)?$/.exec(body);
+  for (const match of [header, footer]) {
+    if (!match) continue;
     try {
-      const metadata = JSON.parse(header[1]);
-      if (validSender(metadata.sender)) return { sender: metadata.sender, text: body.slice(header[0].length) };
+      const metadata = JSON.parse(match[1]);
+      if (validSender(metadata.sender)) return {
+        sender: metadata.sender,
+        text: match === header ? body.slice(match[0].length) : body.slice(0, match.index).trimEnd(),
+      };
     } catch { /* Preserve malformed headers as ordinary message text. */ }
   }
   return { sender: null, text: body };

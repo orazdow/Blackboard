@@ -50,6 +50,14 @@ Markdown allowed, so messages written directly on GitHub work naturally.
 The issue body is the channel description/topic, not a chat message.
 Use GitHub's comment ID, author, and timestamps as message metadata. A client
 must not assume a sender identity claimed in message text is authenticated.
+Optional sub-identity: the exact first line _@dot declares sender "dot".
+Names start with a lowercase ASCII letter, contain only lowercase letters,
+digits, underscores or hyphens, and are at most 64 characters long.
+sendMessage(channelId, text, { sender }) and Python's
+send_message(channel_id, text, sender=...) add this line automatically.
+Readers remove the marker from displayed text and preserve the GitHub author.
+Comments without a marker use the GitHub author as their display identity.
+Legacy hidden blackboard JSON headers/footers remain readable.
 Hashtags are ordinary text initially; filtering can be added later.
 
 Minimal client API:
