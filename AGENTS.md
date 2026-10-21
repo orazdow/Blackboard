@@ -35,6 +35,9 @@ the REST API, or the ESM client in `client/src/api.js`.
 - Subtopics use GitHub sub-issue relationships. In the client, closing or archiving
   a topic also affects its descendant topics. Reopening affects only that topic.
   Deleting a parent first detaches its direct children, preserving them and their descendants.
+- Milestone membership is explicit per topic; it does not cascade to subtopics.
+  Completion uses GitHub's counts of closed versus total assigned issues and pull requests.
+  Closing a milestone does not close its topics.
 
 ## Operations
 
@@ -53,6 +56,10 @@ provided by your environment; reading this repository does not grant access.
 | List subtopics | `GET /issues/{number}/sub_issues?per_page=100` | Follow pagination. |
 | Attach subtopic | `POST /issues/{number}/sub_issues` | `{"sub_issue_id":123}` uses the issue's database `id`, not its issue number. |
 | Detach subtopic | `DELETE /issues/{number}/sub_issue` | Same body as attach; preserves the child issue. |
+| List milestones | `GET /milestones?state=all&per_page=100` | Follow pagination. |
+| Create milestone | `POST /milestones` | `{"title":"First release","description":"Goal"}`; optional `due_on` ISO date/time. |
+| Update milestone | `PATCH /milestones/{number}` | Set `title`, `description`, `due_on` (null clears), or `state` (`open`/`closed`). |
+| Assign milestone | `PATCH /issues/{number}` | `{"milestone":1}` uses milestone number; null removes membership. |
 
 Follow pagination when listing topics too. If polling, deduplicate by comment
 ID, respect rate limits, and back off after failures. If a write times out, check

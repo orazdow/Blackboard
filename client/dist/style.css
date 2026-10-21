@@ -63,7 +63,7 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
+button:where(:hover:not(:disabled)) {
   background: var(--color-accent-hover);
 }
 
@@ -123,7 +123,8 @@ textarea::placeholder {
 .workspace-header .muted { font-size: 0.75rem; }
 .sidebar-actions { margin: 0 calc(-1 * var(--space-3)) var(--space-6); padding: 0; border-bottom: 1px solid var(--color-border); }
 .new-topic-button { display: flex; align-items: center; gap: var(--space-3); width: calc(100% - 2 * var(--space-3)); margin-inline: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: 0; color: var(--color-muted); background: transparent; text-align: left; font-size: 0.875rem; font-weight: 600; }
-.new-topic-button:hover:not(:disabled), .cancel-topic-button:hover:not(:disabled) { color: var(--color-text); background: #1a2e40; }
+.new-topic-button:hover:not(:disabled) { color: var(--color-text); background: #20374f; }
+.cancel-topic-button:hover:not(:disabled) { color: var(--color-text); background: #1a2e40; }
 .new-topic-plus { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 1.4rem; line-height: 1; }
 .new-topic-form { display: grid; gap: var(--space-2); margin: var(--space-2) var(--space-1) 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); }
 .new-topic-form label { font-size: 0.75rem; color: var(--color-muted); }
@@ -137,7 +138,7 @@ textarea::placeholder {
 .topic-list-heading .sidebar-label { padding: 0; }
 .topic-filter { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 4px; color: var(--color-muted); background: transparent; cursor: default; }
 .topic-filter:hover:not(:disabled) { color: var(--color-text); background: #1a2e40; }
-.channel-list { display: flex; flex-direction: column; gap: var(--space-1); overflow: auto; }
+.channel-list { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: var(--space-1); overflow: auto; }
 .channel-row { display: flex; align-items: center; flex-shrink: 0; border-radius: var(--radius); }
 .channel-row:hover, .channel-row:focus-within { background: #1a2e40; }
 .channel-row.is-active { background: #21394d; }
@@ -163,7 +164,57 @@ textarea::placeholder {
 .empty-chat { align-items: center; justify-content: center; padding: var(--space-6); text-align: center; }
 @media (hover: none) { .remove-topic-button { opacity: 1; pointer-events: auto; } }
 .channel-hash { color: var(--color-muted); font-weight: 400; }
-.sidebar-footer { display: flex; align-items: center; gap: var(--space-2); margin-top: auto; padding: var(--space-6) var(--space-3) 0; font-size: 0.75rem; color: var(--color-muted); }
+.sidebar-footer { display: flex; align-items: center; flex-shrink: 0; gap: var(--space-2); padding: var(--space-6) var(--space-3) 0; font-size: 0.75rem; color: var(--color-muted); }
+.sidebar-actions, .topic-list-heading { flex-shrink: 0; }
+.milestones-section { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 44px; margin: var(--space-3) calc(-1 * var(--space-3)) 0; border-top: 1px solid var(--color-border); }
+.milestones-section.is-expanded { flex: 0 1 50%; }
+.milestones-toggle { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: var(--space-2); width: 100%; min-height: 44px; padding: var(--space-3) var(--space-6); border-radius: 0; background: transparent; color: var(--color-muted); text-align: left; }
+.milestones-toggle .sidebar-label { padding: 0; color: inherit; }
+.milestones-toggle:hover { background: #20374f; color: var(--color-text); }
+.milestones-toggle svg { flex-shrink: 0; }
+.milestones-panel { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-6); }
+.milestones-panel p { color: var(--color-muted); font-size: 0.8rem; }
+.milestones-panel { padding: var(--space-2) var(--space-3); }
+.milestone-list-actions { margin-bottom: var(--space-2); }
+.new-milestone-button { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2) var(--space-3); background: transparent; color: var(--color-muted); text-align: left; font-size: 0.8rem; }
+.new-milestone-button span { font-size: 1.2rem; line-height: 1; }
+.new-milestone-button:hover:not(:disabled) { background: #20374f; color: var(--color-text); }
+.milestone-list { display: grid; gap: var(--space-1); }
+.milestone-list-item { display: grid; gap: var(--space-2); width: 100%; min-width: 0; padding: var(--space-3); background: transparent; color: var(--color-muted); text-align: left; }
+.milestone-list-item:hover { background: #1a2e40; }
+.milestone-list-item.is-active { background: #21394d; color: #c0d7e8; }
+.milestone-list-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); font-size: 0.8rem; overflow-wrap: anywhere; }
+.milestone-list-title small { font-size: 0.65rem; color: var(--color-muted); }
+.milestone-progress { display: block; width: 100%; height: 5px; border: 0; border-radius: 4px; overflow: hidden; appearance: none; background: #23344c; accent-color: #7bc9af; }
+.milestone-progress::-webkit-progress-bar { background: #23344c; }
+.milestone-progress::-webkit-progress-value { background: #7bc9af; border-radius: 4px; }
+.milestone-progress::-moz-progress-bar { background: #7bc9af; border-radius: 4px; }
+.milestone-detail { overflow-y: auto; padding: var(--space-6) var(--space-8); }
+.milestone-detail-actions { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-6); }
+.milestone-edit-button { padding: var(--space-1) var(--space-3); font-size: 0.8rem; background: #1a2e40; color: var(--color-text); }
+.milestone-due { color: var(--color-muted); margin-top: var(--space-4); font-size: 0.85rem; }
+.milestone-progress-label { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-6) 0 var(--space-3); font-size: 0.85rem; }
+.milestone-progress-label span, .milestone-progress-note { color: var(--color-muted); }
+.milestone-progress-note { margin-top: var(--space-2); font-size: 0.75rem; }
+.milestone-topics-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-8) 0 var(--space-3); }
+.milestone-topics-heading h3 { margin: 0; font-size: 1rem; }
+.milestone-topics-heading select, .topic-milestone-select select { min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: 6px; background: #132332; color: var(--color-muted); font: inherit; font-size: 0.8rem; }
+.topic-milestone-select { position: relative; display: flex; align-items: center; gap: var(--space-2); width: 9rem; min-width: 0; max-width: 35%; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: 6px; background: #132332; color: var(--color-muted); font-size: 0.8rem; }
+.topic-milestone-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-milestone-select svg { flex-shrink: 0; }
+.topic-milestone-select select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.topic-milestone-select:focus-within { outline: 1px solid rgb(119 166 230 / 50%); outline-offset: 2px; }
+.milestone-topic-list { display: grid; gap: var(--space-1); }
+.milestone-topic-row { display: flex; align-items: center; border-bottom: 1px solid var(--color-border); }
+.milestone-topic-link { display: flex; align-items: baseline; justify-content: space-between; flex: 1; min-width: 0; gap: var(--space-3); padding: var(--space-3); background: transparent; color: var(--color-text); text-align: left; overflow-wrap: anywhere; }
+.milestone-topic-link:hover { background: #192e46; }
+.milestone-topic-link small { color: var(--color-muted); font-size: 0.75rem; }
+.milestone-topic-remove { padding: var(--space-1) var(--space-2); background: transparent; color: var(--color-muted); }
+.milestone-dialog form { display: grid; gap: var(--space-2); }
+.milestone-dialog label { margin-top: var(--space-2); color: var(--color-muted); font-size: 0.8rem; }
+.milestone-dialog input, .milestone-dialog textarea { width: 100%; min-width: 0; }
+.milestone-dialog textarea { resize: vertical; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #7996bb; }
 .status-dot.is-connected { background: #7bc9af; }
 .status-dot.is-syncing { background: #c6a46b; }
@@ -187,7 +238,7 @@ textarea::placeholder {
 .topic-status.is-closed { border-color: #52466d; background: #29243b; color: #c9b4ed; }
 .topic-status.is-closed:hover:not(:disabled) { background: #3a3050; }
 .topic-status-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
-.chat-topic-controls { display: flex; justify-content: flex-end; padding: var(--space-4) var(--space-8) 0; }
+.chat-topic-controls { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: var(--space-4) var(--space-8) 0; }
 
 /* Topic status confirmation */
 .topic-status-dialog { width: min(420px, calc(100% - var(--space-8))); max-height: calc(100dvh - var(--space-8)); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: 12px; color: var(--color-text); background: #132332; box-shadow: 0 24px 80px #0008; }
@@ -242,6 +293,8 @@ textarea::placeholder {
   :root { --header-height: 144px; }
   .app-shell { grid-template-columns: 140px minmax(0, 1fr); }
   .sidebar { padding: 0 var(--space-2) var(--space-4); }
+  .milestones-section { margin-inline: calc(-1 * var(--space-2)); }
+  .milestone-detail { padding: var(--space-4); }
   .workspace-header { margin-inline: calc(-1 * var(--space-2)); padding: var(--space-4); }
   .sidebar-actions { margin-inline: calc(-1 * var(--space-2)); }
   .new-topic-button { width: calc(100% - 2 * var(--space-2)); margin-inline: var(--space-2); padding-inline: var(--space-2); }

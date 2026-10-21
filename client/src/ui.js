@@ -2,10 +2,24 @@ import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from
 import { createGitHubClient, isConfigured, GITHUB_OWNER, GITHUB_REPO } from './api.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
+import { createMilestoneTracker, sortMilestones } from './milestone-state.js';
 
 const formatTime = (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const POLL_INTERVAL_MS = 10000;
 const topicSelectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:topic`;
+const milestonesExpandedKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestones-expanded`;
+const activeMilestoneKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestone`;
+function savedMilestone() {
+  try {
+    const id = Number(sessionStorage.getItem(activeMilestoneKey));
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+  } catch { return null; }
+}
+const formatDueDate = (date) => new Date(`${date}T00:00:00`).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+function savedMilestonesExpanded() {
+  try { return localStorage.getItem(milestonesExpandedKey) === 'true'; }
+  catch { return false; }
+}
 function savedTopic() {
   try {
     const id = Number(sessionStorage.getItem(topicSelectionKey));
@@ -21,7 +35,34 @@ const reactionSymbols = {
 export default function App() {
   const api = createGitHubClient();
   const topicTracker = createTopicTracker();
+  const milestoneTracker = createMilestoneTracker();
   const [topics, setTopics] = createSignal([]);
+  const [milestones, setMilestones] = createSignal([]);
+  const [milestonesLoaded, setMilestonesLoaded] = createSignal(false);
+  const [activeMilestoneId, setActiveMilestoneId] = createSignal(savedMilestone());
+  const selectedMilestone = () => milestones().find((item) => item.id === activeMilestoneId());
+  const [milestoneEditing, setMilestoneEditing] = createSignal(null);
+  const [milestoneName, setMilestoneName] = createSignal('');
+  const [milestoneDescription, setMilestoneDescription] = createSignal('');
+  const [milestoneDueDate, setMilestoneDueDate] = createSignal('');
+  const [milestoneSaving, setMilestoneSaving] = createSignal(false);
+  const [milestoneUncertain, setMilestoneUncertain] = createSignal(false);
+  const [milestoneFormError, setMilestoneFormError] = createSignal('');
+  const [milestoneStateBusy, setMilestoneStateBusy] = createSignal(false);
+  const [assignmentBusy, setAssignmentBusy] = createSignal({});
+  createEffect(() => {
+    const id = activeMilestoneId();
+    try {
+      if (id === null) sessionStorage.removeItem(activeMilestoneKey);
+      else sessionStorage.setItem(activeMilestoneKey, String(id));
+    } catch { /* Navigation still works without storage. */ }
+  });
+  const [milestonesExpanded, setMilestonesExpanded] = createSignal(savedMilestonesExpanded());
+  createEffect(() => {
+    const expanded = milestonesExpanded();
+    try { localStorage.setItem(milestonesExpandedKey, String(expanded)); }
+    catch { /* The section still toggles when browser storage is unavailable. */ }
+  });
   const [creatingTopic, setCreatingTopic] = createSignal(false);
   const [topicParent, setTopicParent] = createSignal(null);
   const [collapsedTopics, setCollapsedTopics] = createSignal(new Set());
@@ -63,6 +104,10 @@ export default function App() {
     : syncFailed() ? 'GitHub sync failed; waiting to retry'
     : lastSync() ? `Last synced ${lastSync().toLocaleString()}` : 'Waiting to sync with GitHub';
   const topic = () => topics().find((item) => item.id === activeId());
+  const topicMilestoneLabel = () => {
+    const id = topic()?.milestoneId;
+    return id ? milestones().find((item) => item.id === id)?.name || `Milestone #${id}` : 'Milestones';
+  };
   const statusLabel = (id) => {
     const change = closing()[id];
     if (!change) return '';
@@ -96,6 +141,7 @@ export default function App() {
   let statusDialog;
   let removeDialog;
   let reactionDialog;
+  let milestoneDialog;
   let reactionLoadVersion = 0;
   const messageRevisions = new Map();
   let stopped = false;
@@ -103,6 +149,7 @@ export default function App() {
   let failures = 0;
   let nextAttempt = 0;
   let channelRevision = 0;
+  let milestoneRevision = 0;
 
   onCleanup(() => { stopped = true; });
 
@@ -137,7 +184,14 @@ export default function App() {
           }
         });
       }
-      await loadMessages(activeId());
+      const milestoneReadRevision = milestoneRevision;
+      const incomingMilestones = await api.listMilestones({ includeClosed: true });
+      if (stopped) return;
+      if (milestoneReadRevision === milestoneRevision) {
+        setMilestones(milestoneTracker.reconcile(incomingMilestones));
+        setMilestonesLoaded(true);
+      }
+      if (activeMilestoneId() === null) await loadMessages(activeId());
       failures = 0;
       nextAttempt = 0;
       setLastSync(new Date());
@@ -168,6 +222,7 @@ export default function App() {
   }
 
   async function selectTopic(id) {
+    setActiveMilestoneId(null);
     setCollapsedTopics((previous) => {
       const next = new Set(previous);
       const seen = new Set();
@@ -181,6 +236,112 @@ export default function App() {
     });
     setActiveId(id);
     try { await loadMessages(id); } catch (failure) { if (!stopped) setError(failure.message); }
+  }
+
+  function selectMilestone(id) {
+    setActiveMilestoneId(id);
+  }
+
+  function rememberMilestone(item) {
+    milestoneRevision++;
+    const updated = milestoneTracker.remember(item);
+    setMilestones((previous) => sortMilestones([...previous.filter((entry) => entry.id !== item.id), updated]));
+  }
+
+  function editMilestone(item = null) {
+    setMilestoneEditing(item);
+    setMilestoneName(item?.name || '');
+    setMilestoneDescription(item?.description || '');
+    setMilestoneDueDate(item?.dueDate || '');
+    setMilestoneFormError('');
+    setMilestoneUncertain(false);
+    milestoneDialog.showModal();
+  }
+
+  async function saveMilestone(event) {
+    event.preventDefault();
+    if (milestoneSaving() || milestoneUncertain() || !milestoneName().trim()) return;
+    const editing = milestoneEditing();
+    setMilestoneSaving(true);
+    setMilestoneFormError('');
+    try {
+      const details = { name: milestoneName(), description: milestoneDescription(), dueDate: milestoneDueDate() || null };
+      const saved = await (editing ? api.updateMilestone(editing.id, details) : api.createMilestone(details));
+      rememberMilestone(saved);
+      setMilestonesExpanded(true);
+      selectMilestone(saved.id);
+      milestoneDialog.close();
+      refresh();
+    } catch (failure) {
+      setMilestoneUncertain(Boolean(failure.uncertain));
+      setMilestoneFormError(failure.message);
+    } finally { setMilestoneSaving(false); }
+  }
+
+  async function toggleMilestoneState() {
+    const item = selectedMilestone();
+    if (!item || milestoneStateBusy()) return;
+    setMilestoneStateBusy(true);
+    try {
+      rememberMilestone(await api.updateMilestone(item.id, { state: item.state === 'open' ? 'closed' : 'open' }));
+      refresh();
+    } catch (failure) { setError(failure.message); }
+    finally { setMilestoneStateBusy(false); }
+  }
+
+  async function assignMilestone(id, milestoneId) {
+    if (assignmentBusy()[id]) return;
+    setAssignmentBusy((previous) => ({ ...previous, [id]: true }));
+    try {
+      const updated = await api.setChannelMilestone(id, milestoneId);
+      rememberChange({ ...updated, parentId: topics().find((item) => item.id === id)?.parentId ?? null });
+      refresh();
+    } catch (failure) { setError(failure.message); }
+    finally { setAssignmentBusy((previous) => ({ ...previous, [id]: false })); }
+  }
+
+  function MilestoneOverview() {
+    const linkedTopics = () => topics().filter((item) => item.milestoneId === activeMilestoneId());
+    return <Show when={selectedMilestone()} fallback={
+      <section class="chat-panel empty-chat">
+        <h2>{milestonesLoaded() ? 'Milestone unavailable' : 'Loading milestone…'}</h2>
+        <Show when={error()}><p class="api-error" role="alert">{error()}</p></Show>
+        <button type="button" onClick={() => setActiveMilestoneId(null)}>Back to topics</button>
+      </section>
+    }>{(item) => <section class="chat-panel milestone-overview" aria-label={`${item().name} milestone`}>
+      <header class="chat-header">
+        <h2>{item().name}</h2><p class="muted">Milestone</p>
+        <div class="chat-header-actions"><a class="preview-badge" href={item().url} target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
+      </header>
+      <Show when={error()}><div class="api-error" role="alert">{error()} <button type="button" onClick={() => setError('')} aria-label="Dismiss error">×</button></div></Show>
+      <div class="milestone-detail">
+        <div class="milestone-detail-actions">
+          <button type="button" class="topic-status" classList={{ 'is-closed': item().state === 'closed', 'is-pending': milestoneStateBusy() }}
+            disabled={milestoneStateBusy()} onClick={toggleMilestoneState} title={item().state === 'open' ? 'Close milestone' : 'Reopen milestone'}>
+            <span class="topic-status-dot" aria-hidden="true" />{item().state === 'open' ? 'Open' : 'Closed'}
+          </button>
+          <button type="button" class="milestone-edit-button" disabled={milestoneStateBusy()} onClick={() => editMilestone(item())}>Edit</button>
+        </div>
+        <Show when={item().description}><MessageText text={item().description} /></Show>
+        <Show when={item().dueDate}><p class="milestone-due">Due {formatDueDate(item().dueDate)}</p></Show>
+        <div class="milestone-progress-label"><strong>{item().progress}% complete</strong><span>{item().closed} closed · {item().open} open</span></div>
+        <progress class="milestone-progress" max="100" value={item().progress} aria-label={`${item().name} completion`} />
+        <p class="milestone-progress-note">Progress includes all assigned repository issues and pull requests.</p>
+        <div class="milestone-topics-heading"><h3>Topics</h3>
+          <select aria-label="Add topic to milestone" value="" disabled={!isConfigured}
+            onChange={(event) => { const id = Number(event.currentTarget.value); if (id) assignMilestone(id, item().id); event.currentTarget.value = ''; }}>
+            <option value="">Add topic…</option>
+            <For each={topics().filter((entry) => entry.milestoneId !== item().id)}>{(entry) => <option value={entry.id} disabled={assignmentBusy()[entry.id]}>#{entry.name}{entry.milestoneId ? ' (move here)' : ''}</option>}</For>
+          </select>
+        </div>
+        <Show when={linkedTopics().length} fallback={<p class="muted">No active topics assigned yet.</p>}>
+          <div class="milestone-topic-list"><For each={linkedTopics()}>{(entry) => <div class="milestone-topic-row" classList={{ 'is-pending': assignmentBusy()[entry.id] || entry.syncState === 'confirming' }}>
+            <button type="button" class="milestone-topic-link" onClick={() => selectTopic(entry.id)}><span># {entry.name}</span><small>{entry.state === 'open' ? 'Open' : 'Closed'}</small></button>
+            <button type="button" class="milestone-topic-remove" disabled={assignmentBusy()[entry.id]} onClick={() => assignMilestone(entry.id, null)} aria-label={`Remove ${entry.name} from milestone`} title="Remove from milestone">−</button>
+          </div>}</For></div>
+        </Show>
+      </div>
+    </section>}</Show>;
   }
 
   function replyTo(message) {
@@ -485,14 +646,14 @@ export default function App() {
         </div>
         <nav class="channel-list" aria-label="Topics">
           <For each={visibleTopics()}>{(item) => (
-            <div class="channel-row" style={{ 'margin-left': `${Math.min(item.depth, 5) * 16}px` }} classList={{ 'is-active': activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) || item.syncState === 'confirming' }} aria-busy={closing()[item.id]?.status === 'pending' || item.syncState === 'confirming'}>
+            <div class="channel-row" style={{ 'margin-left': `${Math.min(item.depth, 5) * 16}px` }} classList={{ 'is-active': activeMilestoneId() === null && activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) || item.syncState === 'confirming' }} aria-busy={closing()[item.id]?.status === 'pending' || item.syncState === 'confirming'}>
             <Show when={item.hasChildren} fallback={<span class="topic-expand" aria-hidden="true" />}>
               <button type="button" class="topic-expand" aria-label={`${collapsedTopics().has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`} aria-expanded={!collapsedTopics().has(item.id)} onClick={() => toggleTopic(item.id)}>{collapsedTopics().has(item.id) ? '›' : '⌄'}</button>
             </Show>
             <button
               type="button"
               class="channel-button"
-              aria-current={activeId() === item.id ? 'page' : undefined}
+              aria-current={activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined}
               onClick={() => selectTopic(item.id)}
             >
               <span class="channel-hash" aria-hidden="true">#</span>{item.name}
@@ -516,12 +677,34 @@ export default function App() {
             </div>
           )}</Show>
         </nav>
+        <section class="milestones-section" classList={{ 'is-expanded': milestonesExpanded() }} aria-label="Milestones">
+          <button type="button" class="milestones-toggle" aria-expanded={milestonesExpanded()} aria-controls="milestones-panel"
+            onClick={() => setMilestonesExpanded((expanded) => !expanded)}>
+            <span class="sidebar-label">Milestones</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d={milestonesExpanded() ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'} />
+            </svg>
+          </button>
+          <div id="milestones-panel" class="milestones-panel" hidden={!milestonesExpanded()}>
+            <div class="milestone-list-actions"><button type="button" class="new-milestone-button" disabled={!isConfigured} onClick={() => editMilestone()}><span aria-hidden="true">+</span> New milestone</button></div>
+            <Show when={milestones().length} fallback={<p>{!isConfigured ? 'Connect to GitHub to load milestones.' : milestonesLoaded() ? 'No milestones yet.' : 'Loading milestones…'}</p>}>
+              <nav class="milestone-list" aria-label="Milestones"><For each={milestones()}>{(item) => (
+                <button type="button" class="milestone-list-item" classList={{ 'is-active': activeMilestoneId() === item.id, 'is-pending': item.syncState === 'confirming' }}
+                  aria-current={activeMilestoneId() === item.id ? 'page' : undefined} onClick={() => selectMilestone(item.id)}>
+                  <span class="milestone-list-title">{item.name}<Show when={item.state === 'closed'}><small>Closed</small></Show></span>
+                  <progress class="milestone-progress" max="100" value={item.progress} aria-label={`${item.name}: ${item.progress}% complete`} />
+                </button>
+              )}</For></nav>
+            </Show>
+          </div>
+        </section>
         <footer class="sidebar-footer">
           <span class="status-dot" classList={{ 'is-connected': Boolean(lastSync()) && !syncing() && !syncFailed(), 'is-syncing': syncing() || syncFailed() }}
             role="img" aria-label={syncDescription()} title={syncDescription()} />
         </footer>
       </aside>
 
+      <Show when={activeMilestoneId() === null} fallback={<MilestoneOverview />}>
       <Show when={topic()} fallback={
         <section class="chat-panel empty-chat">
           <h2>{!isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet'}</h2>
@@ -547,6 +730,22 @@ export default function App() {
           <Show when={topics().find((item) => item.id === topic().parentId)}>{(parent) => (
             <button type="button" class="parent-topic-link" onClick={() => selectTopic(parent().id)}>‹ {parent().name}</button>
           )}</Show>
+          <label class="topic-milestone-select" classList={{ 'is-pending': assignmentBusy()[topic().id] }} title={topicMilestoneLabel()}>
+            <span class="sr-only">Milestone</span>
+            <span class="topic-milestone-value" aria-hidden="true">{topicMilestoneLabel()}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            <select aria-label="Topic milestone" value={topic().milestoneId ?? ''} disabled={assignmentBusy()[topic().id] || !milestonesLoaded()}
+              onChange={(event) => {
+                const id = topic().id;
+                const next = event.currentTarget.value ? Number(event.currentTarget.value) : null;
+                event.currentTarget.value = String(topic().milestoneId ?? '');
+                assignMilestone(id, next);
+              }}>
+              <option value="">None</option>
+              <Show when={topic().milestoneId && !milestones().some((item) => item.id === topic().milestoneId)}><option value={topic().milestoneId}>Milestone #{topic().milestoneId}</option></Show>
+              <For each={milestones()}>{(item) => <option value={item.id}>{item.name}{item.state === 'closed' ? ' (closed)' : ''}</option>}</For>
+            </select>
+          </label>
           <button type="button" class="topic-status" classList={{ 'is-closed': topic().state === 'closed' }}
             disabled={Boolean(closing()[topic().id])} aria-haspopup="dialog"
             aria-label={`${topic().state === 'open' ? 'Open' : 'Closed'} topic: ${topic().state === 'open' ? 'close' : 'reopen'} ${topic().name}`}
@@ -614,6 +813,25 @@ export default function App() {
         </form>
       </section>
       </Show>
+      </Show>
+      <dialog ref={milestoneDialog} class="topic-status-dialog milestone-dialog" aria-labelledby="milestone-form-title"
+        onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, milestoneSaving())}
+        onCancel={(event) => { if (milestoneSaving()) event.preventDefault(); }}>
+        <form onSubmit={saveMilestone} aria-busy={milestoneSaving()}>
+          <h2 id="milestone-form-title">{milestoneEditing() ? 'Edit milestone' : 'New milestone'}</h2>
+          <label for="milestone-name">Name</label>
+          <input id="milestone-name" type="text" required maxLength="256" autofocus value={milestoneName()} disabled={milestoneSaving() || milestoneUncertain()} onInput={(event) => setMilestoneName(event.currentTarget.value)} />
+          <label for="milestone-description">Description</label>
+          <textarea id="milestone-description" rows="4" value={milestoneDescription()} disabled={milestoneSaving() || milestoneUncertain()} onInput={(event) => setMilestoneDescription(event.currentTarget.value)} />
+          <label for="milestone-date">Due date <span class="muted">(optional)</span></label>
+          <input id="milestone-date" type="date" value={milestoneDueDate()} disabled={milestoneSaving() || milestoneUncertain()} onInput={(event) => setMilestoneDueDate(event.currentTarget.value)} />
+          <Show when={milestoneFormError()}><p class="dialog-error" role="alert">{milestoneFormError()}</p></Show>
+          <div class="dialog-actions">
+            <button type="button" class="dialog-cancel" disabled={milestoneSaving()} onClick={() => milestoneDialog.close()}>Cancel</button>
+            <button type="submit" disabled={milestoneSaving() || milestoneUncertain() || !milestoneName().trim()}>{milestoneSaving() ? 'Saving…' : milestoneEditing() ? 'Save' : 'Create'}</button>
+          </div>
+        </form>
+      </dialog>
       <dialog ref={statusDialog} class="topic-status-dialog" aria-labelledby="topic-status-title"
         onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, statusPending())}
         onCancel={(event) => { if (statusPending()) event.preventDefault(); }}

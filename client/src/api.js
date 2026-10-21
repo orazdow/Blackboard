@@ -172,6 +172,7 @@ export function createGitHubClient({
     id: issue.number, name: issue.title.slice(CHANNEL_PREFIX.length),
     description: issue.body || '', state: issue.state, url: issue.html_url,
     parentId: null,
+    milestoneId: issue.milestone?.number ?? null,
     archived: (issue.labels || []).some((label) => (typeof label === 'string' ? label : label.name) === ARCHIVED_LABEL),
   });
   const message = (comment) => ({
@@ -191,6 +192,26 @@ export function createGitHubClient({
   const isTopic = (issue) => !issue.pull_request && issue.title.startsWith(CHANNEL_PREFIX);
   const isLocal = (issue) => !issue.repository_url || issue.repository_url.toLowerCase() === base.toLowerCase();
   const subIssues = (id) => listAll(`${issuePath(id)}/sub_issues`);
+  const milestonePath = (id) => {
+    if (!Number.isSafeInteger(id) || id < 1) throw new GitHubError('Invalid milestone ID.');
+    return `/milestones/${id}`;
+  };
+  const milestoneDate = (date) => {
+    if (date === null || date === '') return null;
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new GitHubError('Invalid milestone due date.');
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) throw new GitHubError('Invalid milestone due date.');
+    return parsed.toISOString();
+  };
+  const milestone = (item) => {
+    const open = item.open_issues || 0;
+    const closed = item.closed_issues || 0;
+    return {
+      id: item.number, name: item.title, description: item.description || '', state: item.state,
+      dueDate: item.due_on?.slice(0, 10) ?? null, url: item.html_url,
+      open, closed, progress: open + closed ? Math.round(closed / (open + closed) * 100) : 0,
+    };
+  };
   async function topicTree(id) {
     const root = await request(issuePath(id));
     if (!isTopic(root)) throw new GitHubError('Only Blackboard topics can be changed.');
@@ -211,6 +232,38 @@ export function createGitHubClient({
   }
 
   const api = {
+    async listMilestones({ includeClosed = false } = {}) {
+      return (await listAll(`/milestones?state=${includeClosed ? 'all' : 'open'}&sort=due_on&direction=asc`)).map(milestone);
+    },
+    async createMilestone({ name, description = '', dueDate = null }) {
+      if (!name.trim()) throw new GitHubError('A milestone name is required.');
+      const dueOn = milestoneDate(dueDate);
+      return milestone(await request('/milestones', { method: 'POST', body: {
+        title: name.trim(), description, ...(dueOn ? { due_on: dueOn } : {}),
+      } }));
+    },
+    async updateMilestone(id, { name, description, dueDate, state } = {}) {
+      const path = milestonePath(id);
+      const body = {};
+      if (name !== undefined) {
+        if (!name.trim()) throw new GitHubError('A milestone name is required.');
+        body.title = name.trim();
+      }
+      if (description !== undefined) body.description = description;
+      if (dueDate !== undefined) body.due_on = milestoneDate(dueDate);
+      if (state !== undefined) {
+        if (!['open', 'closed'].includes(state)) throw new GitHubError('Invalid milestone state.');
+        body.state = state;
+      }
+      return milestone(await request(path, { method: 'PATCH', body }));
+    },
+    async setChannelMilestone(id, milestoneId) {
+      const path = issuePath(id);
+      if (milestoneId !== null) milestonePath(milestoneId);
+      const current = await request(path);
+      if (!isTopic(current)) throw new GitHubError('Only Blackboard topics can be assigned.');
+      return channel(await request(path, { method: 'PATCH', body: { milestone: milestoneId } }));
+    },
     async getViewer() {
       if (!viewerPromise) {
         viewerPromise = request('/user', { apiRoot: true }).then((user) => user.login)
