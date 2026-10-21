@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGitHubClient } from '../src/api.js';
-import { parseRepository } from '../src/repository-state.js';
+import { parseRepository, repositoryFromPagesUrl } from '../src/repository-state.js';
 
 test('repository input accepts owner/repo and GitHub clone URLs', () => {
   for (const value of [' Alice/Board ', 'https://github.com/Alice/Board', 'https://github.com/Alice/Board/', 'https://github.com/Alice/Board.git']) {
@@ -16,6 +16,19 @@ test('repository input rejects foreign hosts, credentials, traversal, and non-re
 });
 
 const client = (owner, repo, fetch) => createGitHubClient({ owner, repo, token: 'repo-token', projectToken: 'project-token', fetch, minWriteInterval: 0 });
+
+test('prebuilt template sites infer their own repo from standard Pages URLs', () => {
+  assert.equal(repositoryFromPagesUrl('https://alice.github.io/organizer/'), 'alice/organizer');
+  assert.equal(repositoryFromPagesUrl('https://alice.github.io/organizer/index.html?repo=bob/other'), 'alice/organizer');
+  assert.equal(repositoryFromPagesUrl('https://alice.github.io/'), 'alice/alice.github.io');
+  assert.equal(repositoryFromPagesUrl('https://alice.github.io/index.html'), 'alice/alice.github.io');
+});
+
+test('local, custom-domain, malformed, and misleading Pages URLs do not guess a repository', () => {
+  for (const url of ['http://localhost:3000/', 'https://board.example/organizer/', 'https://alice.github.io.evil.test/organizer/', 'not a URL', 'https://alice.github.io/owner%2Frepo/']) {
+    assert.equal(repositoryFromPagesUrl(url), null);
+  }
+});
 
 test('connection verifies repository and issue access without any write and uses canonical owner/name', async () => {
   const paths = [];

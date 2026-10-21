@@ -112,12 +112,15 @@ in memory. Forget credentials removes that repository's saved tokens.
 `?repo=owner/repo` overrides the last selection and public default in `main.js`.
 The browser must never import `config.local.js` or embed credentials in its bundle.
 Scripts pass credentials explicitly to `createGitHubClient`. OAuth is not implemented.
-GitHub Pages deployment uses `.github/workflows/pages.yml`, triggered manually
-with workflow_dispatch. It tests/builds `client/` and publishes only `client/dist`.
-Do not include local config or personal tokens in the workflow or site artifact.
-The Pages build sets BLACKBOARD_REPOSITORY from github.repository. Rollup resolves
-that public default into main.js so template-created repositories open themselves.
-Local builds without that variable retain the original Blackboard default.
+For branch-based GitHub Pages, run `npm.cmd run build-pages` from `client/`.
+Rollup writes the bundle and static assets to the root `/docs` folder. Commit that
+folder: Pages cannot publish ignored/local-only files. The separate `doc/` folder
+contains planning documents. Templates include `/docs` so their users can select
+Pages > Deploy from a branch > main /docs without installing or building anything.
+The prebuilt client infers its home repo from OWNER.github.io/REPOSITORY URLs.
+A BLACKBOARD_REPOSITORY build override takes precedence over URL inference;
+localhost falls back to the original Blackboard repo. Custom domains need the
+build override or ?repo=owner/repo. Do not include local config or tokens in builds.
 Workspace state is remounted on switches, keeping API instances and polling isolated.
 Chat drafts, credentials, and navigation are scoped by repository. The menu lists
 only the active repository, not a history. Switching waits for pending writes to finish.

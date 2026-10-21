@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "rollup -c",
+    "build-pages": "rollup -c --environment BUILD_PAGES:true",
     "serve": "rollup -c -w"
   },
   "devDependencies": {

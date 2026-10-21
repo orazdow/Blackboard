@@ -2,18 +2,20 @@ import serve from 'rollup-plugin-serve';
 import livereload from 'rollup-plugin-livereload';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import { babel } from '@rollup/plugin-babel';
+import { readFileSync } from 'node:fs';
 import { parseRepository, repositoryName } from './src/repository-state.js';
 
-const dev = Boolean(process.env.ROLLUP_WATCH);
+const pages = process.env.BUILD_PAGES === 'true';
+const dev = Boolean(process.env.ROLLUP_WATCH) && !pages;
 const repository = process.env.BLACKBOARD_REPOSITORY;
 const defaultRepository = repository ? repositoryName(parseRepository(repository)) : '';
 
 export default {
   input: 'src/main.js',
   output: {
-    file: 'dist/main.js',
+    file: pages ? '../docs/main.js' : 'dist/main.js',
     format: 'es',
-    sourcemap: true,
+    sourcemap: !pages,
   },
   plugins: [
     {
@@ -30,6 +32,15 @@ export default {
       exclude: 'node_modules/**',
       presets: ['babel-preset-solid'],
     }),
+    ...(pages ? [{
+      name: 'pages-assets',
+      generateBundle() {
+        for (const fileName of ['index.html', 'style.css', 'lyra.jpg']) {
+          this.emitFile({ type: 'asset', fileName, source: readFileSync(`dist/${fileName}`) });
+        }
+        this.emitFile({ type: 'asset', fileName: '.nojekyll', source: '' });
+      },
+    }] : []),
     ...(dev
       ? [
           {

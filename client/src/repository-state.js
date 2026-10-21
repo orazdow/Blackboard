@@ -14,3 +14,16 @@ export function parseRepository(value) {
 
 export const repositoryName = ({ owner, repo }) => `${owner}/${repo}`;
 export const repositoryKey = (repository) => repositoryName(repository).toLowerCase();
+
+// A template ships the same prebuilt client to every owner. Standard Pages URLs
+// identify the new home repository without requiring a rebuild or private config.
+export function repositoryFromPagesUrl(value) {
+  try {
+    const url = new URL(value);
+    const owner = /^([a-z0-9-]+)\.github\.io$/i.exec(url.hostname)?.[1];
+    if (!owner) return null;
+    const first = url.pathname.split('/').filter(Boolean)[0];
+    const repo = first && first !== 'index.html' ? decodeURIComponent(first) : `${owner}.github.io`;
+    return repositoryName(parseRepository(`${owner}/${repo}`));
+  } catch { return null; }
+}

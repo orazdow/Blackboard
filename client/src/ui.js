@@ -21,12 +21,13 @@ export default function App(props = {}) {
   let storage;
   try { storage = localStorage; } catch { /* In-memory credentials still work. */ }
   const credentials = createCredentialStore(storage);
+  const siteSelectionKey = `blackboard:site:${new URL('.', window.location.href).pathname}:active-repository`;
   let initial = defaults;
   try {
     const requested = new URL(window.location.href).searchParams.get('repo');
     if (requested) initial = parseRepository(requested);
     else {
-      const saved = sessionStorage.getItem('blackboard:active-repository');
+      const saved = sessionStorage.getItem(siteSelectionKey);
       if (saved) initial = parseRepository(saved);
     }
   } catch { /* Invalid saved selections fall back to local configuration. */ }
@@ -37,7 +38,7 @@ export default function App(props = {}) {
   function connect(next, tokens, remember) {
     const saved = credentials.save(next, tokens, remember);
     try {
-      sessionStorage.setItem('blackboard:active-repository', repositoryName(next));
+      sessionStorage.setItem(siteSelectionKey, repositoryName(next));
     } catch { /* Switching still works without browser storage. */ }
     try {
       const url = new URL(window.location.href);

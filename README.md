@@ -75,23 +75,31 @@ that site origin.
 
 ## GitHub Pages
 
-The **Deploy Blackboard Pages** workflow builds and publishes `client/dist`.
-Deployment is manual; ordinary pushes do not update the live site.
+From `client/`, build the ready-to-publish site:
 
-1. Commit and push `.github/workflows/pages.yml` and the client to the default branch.
-2. In the repository, open **Settings → Pages** and select **GitHub Actions** as the source.
-3. Open **Actions → Deploy Blackboard Pages → Run workflow**.
+```powershell
+npm.cmd run build-pages
+```
 
-The run installs dependencies, tests, builds, and publishes the static client.
-Its deployment displays the actual website link. The usual project URL is
-`https://OWNER.github.io/REPOSITORY/`. Users supply their tokens through Permit;
-no personal token or other application secret is needed in the workflow.
+This writes the bundle and static assets to `/docs` at the repository root.
+Commit and push `/docs` along with the source changes. Unlike local build output,
+this folder must stay tracked: GitHub Pages publishes the committed files.
+The separate `doc/` folder contains planning documents and is unrelated.
+
+In **Settings > Pages**, choose **Deploy from a branch**, select your branch
+(usually `main`) and **/docs**, then Save. GitHub publishes the site after changes
+are pushed to that folder. No custom workflow run is needed.
 
 ## Your own Blackboard
 
-Choose **Use this template → Create a new repository** on GitHub, then give your
-repository any name. Enable Pages with GitHub Actions as its source and run the
-Pages workflow as described above. Its build automatically defaults to your
-repository via `BLACKBOARD_REPOSITORY`; you do not need to edit the client.
-Local builds retain the Blackboard default unless that environment variable is set.
-The repo selector and `?repo=owner/repo` argument can still select another workspace.
+Choose **Use this template > Create a new repository**, give the repo any name,
+then enable Pages from **main /docs** as described above. The template includes
+the prebuilt site, so users do not need Node or a build step to get started.
+
+At `https://OWNER.github.io/REPOSITORY/`, the client automatically defaults to
+that owner/repository. URL arguments and the repo selector can still change the
+active workspace. Each site's last selected workspace is remembered separately.
+For custom domains, use `?repo=owner/repo` or build with BLACKBOARD_REPOSITORY set.
+Users enter their credentials through Permit; no tokens are included in the site.
+
+Maintainers rerun `build-pages` and commit `/docs` when publishing client updates.
