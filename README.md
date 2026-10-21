@@ -72,3 +72,26 @@ ignored by Git. The built `client/dist/` is a static site; its tokens are suppli
 by each user at runtime, not embedded in the build. GitHub Pages deployment is
 a separate setup step. Saved browser tokens are accessible to code served from
 that site origin.
+
+## GitHub Pages
+
+The **Deploy Blackboard Pages** workflow builds and publishes `client/dist`.
+Deployment is manual; ordinary pushes do not update the live site.
+
+1. Commit and push `.github/workflows/pages.yml` and the client to the default branch.
+2. In the repository, open **Settings → Pages** and select **GitHub Actions** as the source.
+3. Open **Actions → Deploy Blackboard Pages → Run workflow**.
+
+The run installs dependencies, tests, builds, and publishes the static client.
+Its deployment displays the actual website link. The usual project URL is
+`https://OWNER.github.io/REPOSITORY/`. Users supply their tokens through Permit;
+no personal token or other application secret is needed in the workflow.
+
+## Your own Blackboard
+
+Choose **Use this template → Create a new repository** on GitHub, then give your
+repository any name. Enable Pages with GitHub Actions as its source and run the
+Pages workflow as described above. Its build automatically defaults to your
+repository via `BLACKBOARD_REPOSITORY`; you do not need to edit the client.
+Local builds retain the Blackboard default unless that environment variable is set.
+The repo selector and `?repo=owner/repo` argument can still select another workspace.

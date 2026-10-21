@@ -2,8 +2,11 @@ import serve from 'rollup-plugin-serve';
 import livereload from 'rollup-plugin-livereload';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import { babel } from '@rollup/plugin-babel';
+import { parseRepository, repositoryName } from './src/repository-state.js';
 
 const dev = Boolean(process.env.ROLLUP_WATCH);
+const repository = process.env.BLACKBOARD_REPOSITORY;
+const defaultRepository = repository ? repositoryName(parseRepository(repository)) : '';
 
 export default {
   input: 'src/main.js',
@@ -13,6 +16,12 @@ export default {
     sourcemap: true,
   },
   plugins: [
+    {
+      name: 'repository-default',
+      resolveImportMeta(property) {
+        if (property === 'BLACKBOARD_REPOSITORY') return JSON.stringify(defaultRepository);
+      },
+    },
     nodeResolve({ browser: true, exportConditions: ['browser'] }),
     babel({
       babelHelpers: 'bundled',

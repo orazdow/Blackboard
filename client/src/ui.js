@@ -1085,7 +1085,7 @@ function Workspace(props) {
                 if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) sendMessage(event);
               }}
             />
-            <button type="submit" disabled={!draft().trim() || Boolean(outgoing())}>Send <span aria-hidden="true">↗</span></button>
+            <button type="submit" disabled={Boolean(outgoing())}>Send <span aria-hidden="true">↗</span></button>
           </div>
           <p class="composer-hint">Enter to send · Shift + Enter for a new line <span>{GITHUB_OWNER}/{GITHUB_REPO}</span></p>
         </form>

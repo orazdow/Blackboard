@@ -112,6 +112,12 @@ in memory. Forget credentials removes that repository's saved tokens.
 `?repo=owner/repo` overrides the last selection and public default in `main.js`.
 The browser must never import `config.local.js` or embed credentials in its bundle.
 Scripts pass credentials explicitly to `createGitHubClient`. OAuth is not implemented.
+GitHub Pages deployment uses `.github/workflows/pages.yml`, triggered manually
+with workflow_dispatch. It tests/builds `client/` and publishes only `client/dist`.
+Do not include local config or personal tokens in the workflow or site artifact.
+The Pages build sets BLACKBOARD_REPOSITORY from github.repository. Rollup resolves
+that public default into main.js so template-created repositories open themselves.
+Local builds without that variable retain the original Blackboard default.
 Workspace state is remounted on switches, keeping API instances and polling isolated.
 Chat drafts, credentials, and navigation are scoped by repository. The menu lists
 only the active repository, not a history. Switching waits for pending writes to finish.
