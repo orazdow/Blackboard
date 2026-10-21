@@ -15,21 +15,26 @@ From PowerShell:
 ```powershell
 cd client
 npm.cmd install
-Copy-Item src/config.example.js src/config.local.js
 ```
 
-Copy the example only on a fresh checkout. Edit `client/src/config.local.js`
-with your token, repository owner, and repository name. The token needs
-Issues read/write permission for that repository. Existing local settings
-were preserved during the directory move.
+The top-left repository menu contains **Permit?**. Enter a repository token and,
+optionally, a separate Projects token, then Connect. Access is checked before
+credentials are activated. **Remember on this browser** saves credentials per
+repository in localStorage; uncheck it to keep them only in the running page.
+**Permitted ?** opens the same dialog for updating or forgetting credentials.
+If the optional Projects token fails, you can continue without Projects.
 
-The top-left header shows the active repository. Click it, then Connect repository
-to enter `owner/repo` or a GitHub repository URL. The current token must have access
-to that repository. Access is checked before switching, and recent repositories
-appear in the same menu. Chat drafts and navigation stay separate for each repo.
-You can also open `http://localhost:3000/?repo=owner/repo` to choose a repository;
-without that URL argument, the client uses the tab's last selection or local config.
-This selector does not add GitHub sign-in; authentication still uses local config.
+**Connect repository?** opens the dialog for another repository. Enter
+`owner/repo` or a GitHub repository URL. Only the active repository is listed.
+Chat drafts and navigation stay separate for each repo. You can also open
+`http://localhost:3000/?repo=owner/repo`. Without that argument, the client uses
+the tab's last selection or `DEFAULT_REPOSITORY` in `client/src/main.js`.
+
+The browser build does not import `config.local.js` or embed tokens. Existing
+local config files are preserved but no longer used by the web client; paste
+those credentials into Permit once. Scripts can pass their own credentials
+explicitly to `createGitHubClient({ owner, repo, token, projectToken })`.
+This is token-based authentication; GitHub OAuth sign-in is not implemented.
 
 Discussion integration is experimental and disabled by default. Set
 `ENABLE_DISCUSSIONS = true` in `client/src/main.js` to turn it on; leave it false
@@ -41,9 +46,8 @@ token Discussions read/write permission. New topic has an inline Task/Talk
 switch (Task initially, then your last choice). Discussions use General by default;
 labels remain shared tags. Comments and replies appear chronologically in chat.
 
-For Projects, set the optional `GITHUB_PROJECT_TOKEN` in the same local file to
-a classic personal access token with the `project` scope. Keep `GITHUB_TOKEN`
-for repository operations. Projects must be linked to the configured repository
+For Projects, enter a classic personal access token with the `project` scope
+in the optional Projects token field. The repository token stays separate. Projects must be linked to the configured repository
 to appear in the sidebar. The board supports adding topics and moving cards by
 dragging or choosing a status; opening a topic provides a Back to project control.
 Project status is separate from a topic's open/closed state. Column menus support
@@ -64,5 +68,7 @@ node --test
 ```
 
 Local configuration, dependencies, and generated JavaScript/source maps are
-ignored by Git. The local token is included in generated bundles, so those
-builds are for local use; do not publish a build containing your token.
+ignored by Git. The built `client/dist/` is a static site; its tokens are supplied
+by each user at runtime, not embedded in the build. GitHub Pages deployment is
+a separate setup step. Saved browser tokens are accessible to code served from
+that site origin.

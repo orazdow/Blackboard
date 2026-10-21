@@ -1,8 +1,9 @@
 import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from 'solid-js';
-import { createGitHubClient, GITHUB_TOKEN, isProjectConfigured, isDiscussionId, GITHUB_OWNER as DEFAULT_OWNER, GITHUB_REPO as DEFAULT_REPO } from './api.js';
+import { createGitHubClient, isDiscussionId } from './api.js';
+import { createCredentialStore } from './credentials.js';
 import ProjectBoard from './project-ui.js';
 import RepositorySelector from './repository-ui.js';
-import { parseRepository, repositoryKey, repositoryName, recentRepositories, readRecentRepositories } from './repository-state.js';
+import { parseRepository, repositoryKey, repositoryName } from './repository-state.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
 import { createMilestoneTracker, sortMilestones } from './milestone-state.js';
@@ -16,9 +17,10 @@ const reactionSymbols = {
 };
 
 export default function App(props = {}) {
-  const defaults = { owner: DEFAULT_OWNER, repo: DEFAULT_REPO };
-  let recent = [];
-  try { recent = readRecentRepositories(localStorage); } catch { /* Storage is optional. */ }
+  const defaults = parseRepository(props.defaultRepository || 'orazdow/Blackboard');
+  let storage;
+  try { storage = localStorage; } catch { /* In-memory credentials still work. */ }
+  const credentials = createCredentialStore(storage);
   let initial = defaults;
   try {
     const requested = new URL(window.location.href).searchParams.get('repo');
@@ -28,15 +30,13 @@ export default function App(props = {}) {
       if (saved) initial = parseRepository(saved);
     }
   } catch { /* Invalid saved selections fall back to local configuration. */ }
-  const [repository, setRepository] = createSignal(initial);
-  const [repositories, setRepositories] = createSignal(recent);
+  const [connection, setConnection] = createSignal({ repository: initial, credentials: credentials.get(initial) });
+  const repository = () => connection().repository;
+  const [permitted, setPermitted] = createSignal(false);
   const sessionState = new Map();
-  function connect(next) {
-    const previous = repository().owner && repository().repo ? recentRepositories(repositories(), repository()) : repositories();
-    const updated = recentRepositories(previous, next);
-    setRepositories(updated);
+  function connect(next, tokens, remember) {
+    const saved = credentials.save(next, tokens, remember);
     try {
-      localStorage.setItem('blackboard:recent-repositories', JSON.stringify(updated));
       sessionStorage.setItem('blackboard:active-repository', repositoryName(next));
     } catch { /* Switching still works without browser storage. */ }
     try {
@@ -44,16 +44,23 @@ export default function App(props = {}) {
       url.searchParams.set('repo', repositoryName(next));
       history.replaceState(null, '', url);
     } catch { /* URL updates are optional. */ }
-    setRepository(next);
+    batch(() => { setPermitted(true); setConnection({ repository: next, credentials: saved }); });
   }
-  return <Show when={repository()} keyed>{(selected) => <Workspace repository={selected} recent={repositories()} onConnect={connect}
+  function forget() {
+    credentials.forget(repository());
+    batch(() => { setPermitted(false); setConnection({ repository: repository(), credentials: null }); });
+  }
+  return <Show when={connection()} keyed>{(selected) => <Workspace repository={selected.repository} credentials={selected.credentials}
+    permitted={permitted()} onConnect={connect} onForget={forget} getCredentials={(repo) => credentials.get(repo)}
+    onAccessChange={(value) => { if (connection() === selected) setPermitted(value); }}
     sessionState={sessionState} discussionsEnabled={props.discussionsEnabled} />}</Show>;
 }
 
 function Workspace(props) {
   const GITHUB_OWNER = props.repository.owner;
   const GITHUB_REPO = props.repository.repo;
-  const isConfigured = Boolean(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
+  const isConfigured = Boolean(props.credentials?.token && GITHUB_OWNER && GITHUB_REPO);
+  const isProjectConfigured = Boolean(props.credentials?.projectToken);
   const topicSelectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:topic`;
   const milestonesExpandedKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestones-expanded`;
   const sidebarSectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:sidebar-section`;
@@ -95,14 +102,14 @@ function Workspace(props) {
   }
 
   const discussionsEnabled = props.discussionsEnabled === true;
-  const api = createGitHubClient({ owner: GITHUB_OWNER, repo: GITHUB_REPO });
+  const api = createGitHubClient({ owner: GITHUB_OWNER, repo: GITHUB_REPO, token: props.credentials?.token || '', projectToken: props.credentials?.projectToken || '' });
   const topicTracker = createTopicTracker();
   const milestoneTracker = createMilestoneTracker();
   const [topics, setTopics] = createSignal([]);
   const [projects, setProjects] = createSignal([]);
   const [projectsLoading, setProjectsLoading] = createSignal(false);
   const [projectsError, setProjectsError] = createSignal('');
-  const [activeProjectId, setActiveProjectId] = createSignal(savedProject());
+  const [activeProjectId, setActiveProjectId] = createSignal(isConfigured && isProjectConfigured ? savedProject() : null);
   const [returnProjectId, setReturnProjectId] = createSignal(null);
   createEffect(() => {
     const id = activeProjectId();
@@ -117,7 +124,7 @@ function Workspace(props) {
   const [tagOperations, setTagOperations] = createSignal({});
   const [milestones, setMilestones] = createSignal([]);
   const [milestonesLoaded, setMilestonesLoaded] = createSignal(false);
-  const [activeMilestoneId, setActiveMilestoneId] = createSignal(savedMilestone());
+  const [activeMilestoneId, setActiveMilestoneId] = createSignal(isConfigured ? savedMilestone() : null);
   const selectedMilestone = () => milestones().find((item) => item.id === activeMilestoneId());
   const [milestoneEditing, setMilestoneEditing] = createSignal(null);
   const [milestoneName, setMilestoneName] = createSignal('');
@@ -296,6 +303,7 @@ function Workspace(props) {
         loadDiscussions(),
       ]);
       if (stopped) return;
+      props.onAccessChange(true);
       // A discussion permission failure must not hide or prevent reading tasks.
       const discussions = discussionRead.items;
       const allChannels = [...issueChannels, ...discussions];
@@ -347,6 +355,7 @@ function Workspace(props) {
       failures += 1;
       nextAttempt = Math.max(failure.retryAt || 0, Date.now() + Math.min(120000, POLL_INTERVAL_MS * 2 ** (failures - 1)));
       if (!stopped) {
+        if ([401, 403, 404].includes(failure.status)) props.onAccessChange(false);
         setSyncFailed(true);
         setError(failure.message);
       }
@@ -823,7 +832,8 @@ function Workspace(props) {
   return (
     <section class="app-shell">
       <aside class="sidebar" aria-label="Chat topics">
-        <RepositorySelector repository={props.repository} recent={props.recent} onConnect={props.onConnect} switchDisabled={switchingDisabled()} />
+        <RepositorySelector repository={props.repository} credentials={props.credentials} permitted={props.permitted}
+          getCredentials={props.getCredentials} onConnect={props.onConnect} onForget={props.onForget} switchDisabled={switchingDisabled()} />
         <div class="sidebar-actions">
           <button
             ref={newTopicButton}
@@ -950,7 +960,7 @@ function Workspace(props) {
       <Show when={topic()} fallback={
         <section class="chat-panel empty-chat">
           <h2>{!isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet'}</h2>
-          <p class="muted">{!isConfigured ? 'Fill in the token, owner, and repository in src/config.local.js.' : 'Create a topic to start a conversation.'}</p>
+          <p class="muted">{!isConfigured ? 'Open the repository menu and choose Permit to connect.' : 'Create a topic to start a conversation.'}</p>
           <Show when={error()}><p class="api-error" role="alert">{error()}</p></Show>
           <button type="button" disabled={!isConfigured || syncing()} onClick={() => startTopic()}>New topic</button>
         </section>

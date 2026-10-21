@@ -14,14 +14,3 @@ export function parseRepository(value) {
 
 export const repositoryName = ({ owner, repo }) => `${owner}/${repo}`;
 export const repositoryKey = (repository) => repositoryName(repository).toLowerCase();
-
-export function recentRepositories(previous, repository) {
-  return [repository, ...previous.filter((entry) => repositoryKey(entry) !== repositoryKey(repository))].slice(0, 6);
-}
-
-export function readRecentRepositories(storage) {
-  try {
-    const saved = JSON.parse(storage.getItem('blackboard:recent-repositories') || '[]');
-    return Array.isArray(saved) ? saved.map((entry) => parseRepository(repositoryName(entry))).slice(0, 6) : [];
-  } catch { return []; }
-}

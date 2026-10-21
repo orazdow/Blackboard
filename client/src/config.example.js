@@ -1,4 +1,5 @@
-// Copy to config.local.js and fill in your repository settings.
+// Optional settings for your own Node scripts. The web UI uses Permit instead.
+// Copy to config.local.js and pass these values explicitly to createGitHubClient.
 // Fine-grained token permissions: Issues and Discussions (read/write).
 export const GITHUB_TOKEN = '';
 export const GITHUB_OWNER = '';

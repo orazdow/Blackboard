@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGitHubClient } from '../src/api.js';
-import { parseRepository, repositoryKey, recentRepositories, readRecentRepositories } from '../src/repository-state.js';
+import { parseRepository } from '../src/repository-state.js';
 
 test('repository input accepts owner/repo and GitHub clone URLs', () => {
   for (const value of [' Alice/Board ', 'https://github.com/Alice/Board', 'https://github.com/Alice/Board/', 'https://github.com/Alice/Board.git']) {
@@ -13,21 +13,6 @@ test('repository input rejects foreign hosts, credentials, traversal, and non-re
   for (const value of ['', 'Board', 'Alice/Board/issues', 'Alice/..', 'https://example.com/Alice/Board', 'https://github.com.evil.test/Alice/Board', 'https://token@github.com/Alice/Board', 'https://github.com/Alice/Board?token=secret', 'https://github.com:444/Alice/Board']) {
     assert.throws(() => parseRepository(value), /repository URL or owner\/repo/);
   }
-});
-
-test('recent repositories are deduplicated case-insensitively and bounded', () => {
-  const existing = Array.from({ length: 7 }, (_, i) => ({ owner: 'Alice', repo: `Board-${i}` }));
-  const updated = recentRepositories(existing, { owner: 'alice', repo: 'board-3' });
-  assert.equal(updated.length, 6);
-  assert.equal(repositoryKey(updated[0]), 'alice/board-3');
-  assert.equal(updated.filter((item) => repositoryKey(item) === 'alice/board-3').length, 1);
-});
-
-test('corrupt or inaccessible storage cannot prevent startup', () => {
-  assert.deepEqual(readRecentRepositories({ getItem() { throw new Error('Blocked'); } }), []);
-  assert.deepEqual(readRecentRepositories({ getItem: () => '{bad' }), []);
-  assert.deepEqual(readRecentRepositories({ getItem: () => '{"owner":"Alice"}' }), []);
-  assert.deepEqual(readRecentRepositories({ getItem: () => '[{"owner":"Alice","repo":"Board"}]' }), [{ owner: 'Alice', repo: 'Board' }]);
 });
 
 const client = (owner, repo, fetch) => createGitHubClient({ owner, repo, token: 'repo-token', projectToken: 'project-token', fetch, minWriteInterval: 0 });

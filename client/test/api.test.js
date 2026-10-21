@@ -282,7 +282,7 @@ test('honors rate-limit resets without repeatedly calling GitHub', async () => {
 
 test('missing credentials and invalid channel IDs fail before fetching', async () => {
   const fetch = async () => assert.fail('Unexpected network call');
-  await assert.rejects(client(fetch, { token: '' }).listChannels(), /Fill in/);
+  await assert.rejects(client(fetch, { token: '' }).listChannels(), /Permit this repository/);
   await assert.rejects(client(fetch).sendMessage(-1, 'Hello'), /Invalid channel ID/);
 });
 

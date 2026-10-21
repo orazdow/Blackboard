@@ -99,19 +99,26 @@ Python helper code from the earlier experiment can be found in Git history.
 Run commands from `client/`: `npm.cmd run serve`, `npm.cmd run build`, `node --test`.
 Keep API operations in `src/api.js`, Solid UI in `src/ui.js` and `src/project-ui.js`,
 and styling in `dist/style.css`. Repository selection UI is in `src/repository-ui.js`,
-with input parsing in `src/repository-state.js`. Keep local credentials and PEM keys out of commits.
+with input parsing in `src/repository-state.js` and credential storage in
+`src/credentials.js`. Keep local credentials and PEM keys out of commits.
 
 The top-left header selects the active repository. Connect accepts owner/repo or
 a GitHub repository URL and checks repository and Issues access before switching.
-It uses the existing local token; this does not provide OAuth or change credentials.
-`?repo=owner/repo` overrides the last selection and local default on startup.
+Permit opens a modal for a repository token, an optional Projects token, and
+Remember on this browser. Validate access before saving or activating credentials;
+optional Projects failure can be acknowledged by continuing without Projects.
+Remembered tokens are scoped per repository in localStorage; otherwise they stay
+in memory. Forget credentials removes that repository's saved tokens.
+`?repo=owner/repo` overrides the last selection and public default in `main.js`.
+The browser must never import `config.local.js` or embed credentials in its bundle.
+Scripts pass credentials explicitly to `createGitHubClient`. OAuth is not implemented.
 Workspace state is remounted on switches, keeping API instances and polling isolated.
-Chat drafts and navigation are scoped by repository; recent repositories contain
-only public configuration. Switching waits for pending writes to finish.
+Chat drafts, credentials, and navigation are scoped by repository. The menu lists
+only the active repository, not a history. Switching waits for pending writes to finish.
 
 Projects use GitHub Projects V2 via GraphQL. The sidebar lists projects linked to
-the configured repository. `GITHUB_PROJECT_TOKEN` is a separate local credential
-for project queries and mutations; issue operations retain `GITHUB_TOKEN`.
+the configured repository. The optional Projects token is used for project
+queries and mutations; issue operations retain the separate repository token.
 User-owned projects require a classic token with the `project` scope. Project
 Status and topic Open/Closed are independent; moving a card must not close its topic.
 Board Add item creates a project-only draft, not a topic issue. Removing an issue

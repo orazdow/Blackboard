@@ -129,7 +129,10 @@ textarea::placeholder {
 .repository-heading .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repository-chevron { flex-shrink: 0; color: var(--color-muted); }
 .repository-menu { position: absolute; top: calc(100% - 8px); left: var(--space-3); width: 300px; max-width: calc(100vw - 24px); max-height: calc(100dvh - var(--header-height) - 12px); overflow: auto; padding: var(--space-2); border: 1px solid #354b65; border-radius: 8px; background: #16283e; box-shadow: 0 8px 24px #0006; }
-.repository-current { padding: var(--space-2); color: var(--color-muted); font-size: 0.75rem; overflow-wrap: anywhere; border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-1); }
+.repository-current { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); color: var(--color-text); font-size: 0.75rem; border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-1); }
+.repository-current > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.repository-permit { flex-shrink: 0; padding: 3px 9px; border: 1px solid #3b5772; border-radius: 5px; background: #243d55; color: #c3dbef; font-size: 0.7rem; }
+.repository-permit:hover:not(:disabled) { background: #304e69; }
 .repository-menu > button { display: block; width: 100%; padding: var(--space-2); border-radius: 4px; background: transparent; color: var(--color-text); text-align: left; overflow-wrap: anywhere; font-size: 0.8rem; }
 .repository-menu > button:hover:not(:disabled) { background: #29415b; }
 .repository-menu form { display: grid; gap: var(--space-2); padding: var(--space-2); }
@@ -139,6 +142,15 @@ textarea::placeholder {
 .repository-form-actions button { padding: var(--space-1) var(--space-2); font-size: 0.75rem; }
 .repository-form-actions button:first-child { background: transparent; color: var(--color-muted); }
 .repository-menu > p { padding: var(--space-2); }
+.permit-dialog { width: min(420px, calc(100vw - 32px)); }
+.permit-dialog form { display: grid; gap: var(--space-2); }
+.permit-dialog form > label { margin-top: var(--space-2); color: var(--color-muted); font-size: 0.8rem; }
+.permit-dialog input { width: 100%; min-width: 0; font-size: 0.85rem; }
+.permit-dialog label.permit-remember { display: flex; align-items: center; gap: var(--space-2); margin-block: var(--space-2); }
+.permit-remember input { width: auto; padding: 0; margin: 0; accent-color: var(--color-accent); }
+.permit-forget { justify-self: start; padding: var(--space-1) 0; background: transparent; color: var(--color-muted); font-size: 0.75rem; }
+.permit-forget:hover:not(:disabled) { background: transparent; color: var(--color-text); }
+.permit-dialog .dialog-actions { flex-wrap: wrap; }
 .sidebar-actions { margin: 0 calc(-1 * var(--space-3)) var(--space-6); padding: 0; border-bottom: 1px solid var(--color-border); }
 .new-topic-button { display: flex; align-items: center; gap: var(--space-3); width: calc(100% - 2 * var(--space-3)); margin-inline: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: 0; color: var(--color-muted); background: transparent; text-align: left; font-size: 0.875rem; font-weight: 600; }
 .new-topic-button:hover:not(:disabled) { color: var(--color-text); background: #20374f; }

@@ -1,15 +1,8 @@
-import { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO } from './config.local.js';
-import * as localConfig from './config.local.js';
-
-export { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO };
-
 export const CHANNEL_PREFIX = '💬 ';
 export const ARCHIVED_LABEL = 'blackboard:archived';
 const REACTION_TYPES = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
 const REACTION_ENUMS = ['THUMBS_UP', 'THUMBS_DOWN', 'LAUGH', 'CONFUSED', 'HEART', 'HOORAY', 'ROCKET', 'EYES'];
 export const isDiscussionId = (id) => typeof id === 'string' && /^discussion:[A-Za-z0-9_=-]{1,256}$/.test(id);
-export const isConfigured = Boolean(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
-export const isProjectConfigured = Boolean(localConfig.GITHUB_PROJECT_TOKEN);
 
 const validSender = (sender) => typeof sender === 'string' && sender.length <= 64 && /^[a-z]/.test(sender) && !/[^a-z0-9_-]/.test(sender);
 
@@ -52,8 +45,8 @@ export class GitHubError extends Error {
 
 // No browser/UI dependencies; fetch can be supplied by scripts or tests.
 export function createGitHubClient({
-  token = GITHUB_TOKEN, owner = GITHUB_OWNER, repo = GITHUB_REPO,
-  projectToken = localConfig.GITHUB_PROJECT_TOKEN || token,
+  token = '', owner = '', repo = '',
+  projectToken = token,
   fetch: fetchImpl = globalThis.fetch, timeout = 20000, minWriteInterval = 1000,
 } = {}) {
   const base = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
@@ -95,7 +88,7 @@ export function createGitHubClient({
   }
 
   async function performRequest(path, { method = 'GET', body, graphql = false, graphqlRead = false, apiRoot = false, cacheKey = path, authToken = token } = {}) {
-    if (!authToken || !owner || !repo) throw new GitHubError('Fill in the token, owner, and repository in src/config.local.js.');
+    if (!authToken || !owner || !repo) throw new GitHubError('Permit this repository with a GitHub token before connecting.');
     if (Date.now() < retryAt) throw new GitHubError('GitHub rate limit reached. Waiting before another request.', { retryAt });
     const writing = method !== 'GET' && !graphqlRead;
     const cached = writing ? null : cache.get(cacheKey);
