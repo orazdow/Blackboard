@@ -171,6 +171,7 @@ export function createGitHubClient({
   const channel = (issue) => ({
     id: issue.number, name: issue.title.slice(CHANNEL_PREFIX.length),
     description: issue.body || '', state: issue.state, url: issue.html_url,
+    parentId: null,
     archived: (issue.labels || []).some((label) => (typeof label === 'string' ? label : label.name) === ARCHIVED_LABEL),
   });
   const message = (comment) => ({
@@ -187,8 +188,29 @@ export function createGitHubClient({
     return `/issues/comments/${commentId}/reactions`;
   };
   const reaction = (entry) => ({ id: entry.id, type: entry.content, author: entry.user.login });
+  const isTopic = (issue) => !issue.pull_request && issue.title.startsWith(CHANNEL_PREFIX);
+  const isLocal = (issue) => !issue.repository_url || issue.repository_url.toLowerCase() === base.toLowerCase();
+  const subIssues = (id) => listAll(`${issuePath(id)}/sub_issues`);
+  async function topicTree(id) {
+    const root = await request(issuePath(id));
+    if (!isTopic(root)) throw new GitHubError('Only Blackboard topics can be changed.');
+    const ordered = [];
+    const visited = new Set();
+    async function visit(issue, parentId) {
+      if (visited.has(issue.id ?? issue.number)) return;
+      visited.add(issue.id ?? issue.number);
+      if (issue.sub_issues_summary?.total !== 0) {
+        for (const child of await subIssues(issue.number)) {
+          if (isLocal(child) && isTopic(child)) await visit(child, issue.number);
+        }
+      }
+      ordered.push({ ...channel(issue), parentId });
+    }
+    await visit(root, undefined);
+    return ordered;
+  }
 
-  return {
+  const api = {
     async getViewer() {
       if (!viewerPromise) {
         viewerPromise = request('/user', { apiRoot: true }).then((user) => user.login)
@@ -208,20 +230,61 @@ export function createGitHubClient({
       if (!Number.isSafeInteger(reactionId) || reactionId < 1) throw new GitHubError('Invalid reaction ID.');
       await request(`${path}/${reactionId}`, { method: 'DELETE' });
     },
-    async listChannels({ includeClosed = false, includeArchived = false } = {}) {
+    async listChannels({ includeClosed = false, includeArchived = false, includeHierarchy = false } = {}) {
       const issues = await listAll(`/issues?state=${includeClosed ? 'all' : 'open'}&sort=created&direction=asc`);
-      return issues.filter((issue) => !issue.pull_request && issue.title.startsWith(CHANNEL_PREFIX))
-        .map(channel).filter((item) => includeArchived || !item.archived);
+      const topicIssues = issues.filter(isTopic);
+      const channels = new Map(topicIssues.map((issue) => [issue.number, channel(issue)]));
+      if (includeHierarchy) {
+        for (const parent of topicIssues) {
+          if (parent.sub_issues_summary?.total === 0) continue;
+          for (const child of await subIssues(parent.number)) {
+            if (isLocal(child) && channels.has(child.number)) channels.get(child.number).parentId = parent.number;
+          }
+        }
+      }
+      return [...channels.values()].filter((item) => includeArchived || !item.archived);
     },
-    async createChannel({ name, topic = '' }) {
+    async createChannel({ name, topic = '', parentId = null }) {
       if (!name.trim()) throw new GitHubError('A topic name is required.');
-      return channel(await request('/issues', { method: 'POST', body: { title: CHANNEL_PREFIX + name.trim(), body: topic } }));
+      if (parentId !== null) {
+        const parent = await request(issuePath(parentId));
+        if (!isTopic(parent)) throw new GitHubError('The parent must be a Blackboard topic.');
+      }
+      const created = await request('/issues', { method: 'POST', body: { title: CHANNEL_PREFIX + name.trim(), body: topic } });
+      if (parentId !== null) {
+        try {
+          await request(`${issuePath(parentId)}/sub_issues`, { method: 'POST', body: { sub_issue_id: created.id } });
+        } catch (failure) {
+          const error = new GitHubError(`Topic #${created.number} was created, but its parent link could not be confirmed. ${failure.message}`, { uncertain: failure.uncertain, retryAt: failure.retryAt });
+          error.createdChannel = channel(created);
+          throw error;
+        }
+      }
+      return { ...channel(created), parentId };
     },
     async closeChannel(id) {
       return channel(await request(issuePath(id), { method: 'PATCH', body: { state: 'closed', state_reason: 'not_planned' } }));
     },
     async reopenChannel(id) {
       return channel(await request(issuePath(id), { method: 'PATCH', body: { state: 'open' } }));
+    },
+    async closeChannelTree(id, onChange = () => {}) {
+      const tree = await topicTree(id);
+      for (const item of tree) {
+        try {
+          if (item.state !== 'closed') await api.closeChannel(item.id);
+        } catch (failure) { failure.affectedChannelId = item.id; throw failure; }
+        onChange({ ...item, state: 'closed' });
+      }
+    },
+    async archiveChannelTree(id, onChange = () => {}) {
+      const tree = await topicTree(id);
+      for (const item of tree) {
+        try {
+          if (!item.archived) await api.archiveChannel(item.id);
+        } catch (failure) { failure.affectedChannelId = item.id; throw failure; }
+        onChange({ ...item, archived: true });
+      }
     },
     async archiveChannel(id) {
       const path = issuePath(id);
@@ -256,6 +319,18 @@ export function createGitHubClient({
       }
       return { id, deleted: true };
     },
+    async deleteChannelPreservingChildren(id, onChange = () => {}) {
+      const parent = await request(issuePath(id));
+      if (!isTopic(parent)) throw new GitHubError('Only Blackboard topics can be deleted.');
+      const children = await subIssues(id);
+      for (const child of children) {
+        try {
+          await request(`${issuePath(id)}/sub_issue`, { method: 'DELETE', body: { sub_issue_id: child.id } });
+        } catch (failure) { failure.deletionNotAttempted = true; throw failure; }
+        if (isLocal(child) && isTopic(child)) onChange({ ...channel(child), parentId: null });
+      }
+      return api.deleteChannel(id);
+    },
     // Initial implementation returns a complete paginated snapshot. Polling
     // replaces the snapshot; comment IDs prevent duplicates. Cursor reads follow.
     async readMessages(id) {
@@ -266,4 +341,5 @@ export function createGitHubClient({
       return message(await request(`${issuePath(id)}/comments`, { method: 'POST', body: { body: encodeMessage(text, sender) } }));
     },
   };
+  return api;
 }

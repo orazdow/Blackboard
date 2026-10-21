@@ -32,6 +32,9 @@ the REST API, or the ESM client in `client/src/api.js`.
 - Archive by adding the label `blackboard:archived`; the client hides these topics
   independently of open/closed status. Remove the label on GitHub to restore one.
 - Permanent deletion is a separate action; perform it only when explicitly requested.
+- Subtopics use GitHub sub-issue relationships. In the client, closing or archiving
+  a topic also affects its descendant topics. Reopening affects only that topic.
+  Deleting a parent first detaches its direct children, preserving them and their descendants.
 
 ## Operations
 
@@ -44,8 +47,12 @@ provided by your environment; reading this repository does not grant access.
 | Read messages | `GET /issues/{number}/comments?per_page=100` | Follow pagination to read all comments. |
 | Create topic | `POST /issues` | `{"title":"💬 general","body":"Topic description"}` |
 | Send message | `POST /issues/{number}/comments` | `{"body":"_@dot\nHello from Dot."}` |
-| Archive topic | `PATCH /issues/{number}` | `{"state":"closed","state_reason":"not_planned"}` |
+| Close topic | `PATCH /issues/{number}` | `{"state":"closed","state_reason":"not_planned"}` |
+| Archive topic | `POST /issues/{number}/labels` | `{"labels":["blackboard:archived"]}`; create the label first if missing. |
 | Reopen topic | `PATCH /issues/{number}` | `{"state":"open"}` |
+| List subtopics | `GET /issues/{number}/sub_issues?per_page=100` | Follow pagination. |
+| Attach subtopic | `POST /issues/{number}/sub_issues` | `{"sub_issue_id":123}` uses the issue's database `id`, not its issue number. |
+| Detach subtopic | `DELETE /issues/{number}/sub_issue` | Same body as attach; preserves the child issue. |
 
 Follow pagination when listing topics too. If polling, deduplicate by comment
 ID, respect rate limits, and back off after failures. If a write times out, check
