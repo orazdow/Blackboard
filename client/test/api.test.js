@@ -372,6 +372,26 @@ test('pagination accepts repository name casing but rejects external URLs', asyn
   assert.equal(externalCalls, 1);
 });
 
+test('numeric repository pagination retains cursor queries and stays on the configured repository', async () => {
+  const calls = [];
+  const api = client(async (url) => {
+    calls.push(url);
+    return Response.json([comment(calls.length)], { headers: calls.length === 1
+      ? { link: '<https://api.github.com/repositories/123/issues/1/comments?per_page=100&after=opaque%3D&page=2>; rel="next"' } : {} });
+  });
+  assert.deepEqual((await api.readMessages(1)).map((entry) => entry.id), [1, 2]);
+  assert.equal(calls[1], 'https://api.github.com/repos/example/chat/issues/1/comments?per_page=100&after=opaque%3D&page=2');
+});
+
+test('pagination cannot switch to another repository name or a different endpoint', async () => {
+  for (const next of ['https://api.github.com/repos/other/repo/issues/1/comments?page=2', 'https://api.github.com/repositories/123/issues/2/comments?page=2']) {
+    let calls = 0;
+    const api = client(async () => { calls++; return Response.json([], { headers: { link: `<${next}>; rel="next"` } }); });
+    await assert.rejects(api.readMessages(1), /unexpected pagination URL/);
+    assert.equal(calls, 1);
+  }
+});
+
 test('stops on secondary rate-limit responses without retrying', async () => {
   let calls = 0;
   const api = client(async () => {

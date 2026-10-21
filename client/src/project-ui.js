@@ -38,6 +38,8 @@ export default function ProjectBoard(props) {
   const [removing, setRemoving] = createSignal(false);
   const [removeError, setRemoveError] = createSignal('');
   const [removeUncertain, setRemoveUncertain] = createSignal(false);
+  createEffect(() => props.onBusyChange?.(adding() || editorBusy() || removing() || fieldBusy() || Object.values(busy()).some(Boolean)));
+  onCleanup(() => props.onBusyChange?.(false));
   let workspace;
   let editorDialog;
   let removeDialog;

@@ -98,7 +98,16 @@ Python helper code from the earlier experiment can be found in Git history.
 
 Run commands from `client/`: `npm.cmd run serve`, `npm.cmd run build`, `node --test`.
 Keep API operations in `src/api.js`, Solid UI in `src/ui.js` and `src/project-ui.js`,
-and styling in `dist/style.css`. Keep local credentials and PEM keys out of commits.
+and styling in `dist/style.css`. Repository selection UI is in `src/repository-ui.js`,
+with input parsing in `src/repository-state.js`. Keep local credentials and PEM keys out of commits.
+
+The top-left header selects the active repository. Connect accepts owner/repo or
+a GitHub repository URL and checks repository and Issues access before switching.
+It uses the existing local token; this does not provide OAuth or change credentials.
+`?repo=owner/repo` overrides the last selection and local default on startup.
+Workspace state is remounted on switches, keeping API instances and polling isolated.
+Chat drafts and navigation are scoped by repository; recent repositories contain
+only public configuration. Switching waits for pending writes to finish.
 
 Projects use GitHub Projects V2 via GraphQL. The sidebar lists projects linked to
 the configured repository. `GITHUB_PROJECT_TOKEN` is a separate local credential

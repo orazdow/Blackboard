@@ -1,51 +1,14 @@
 import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from 'solid-js';
-import { createGitHubClient, isConfigured, isProjectConfigured, isDiscussionId, GITHUB_OWNER, GITHUB_REPO } from './api.js';
+import { createGitHubClient, GITHUB_TOKEN, isProjectConfigured, isDiscussionId, GITHUB_OWNER as DEFAULT_OWNER, GITHUB_REPO as DEFAULT_REPO } from './api.js';
 import ProjectBoard from './project-ui.js';
+import RepositorySelector from './repository-ui.js';
+import { parseRepository, repositoryKey, repositoryName, recentRepositories, readRecentRepositories } from './repository-state.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
 import { createMilestoneTracker, sortMilestones } from './milestone-state.js';
 
 const formatTime = (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const POLL_INTERVAL_MS = 10000;
-const topicSelectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:topic`;
-const milestonesExpandedKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestones-expanded`;
-const sidebarSectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:sidebar-section`;
-const activeMilestoneKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestone`;
-const activeProjectKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:project`;
-const topicKindKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:new-topic-kind`;
-const storedTopicId = (value) => isDiscussionId(value) ? value : Number(value);
-const compareMessages = (a, b) => a.time - b.time || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
-function savedTopicKind() {
-  try { return localStorage.getItem(topicKindKey) === 'discussion' ? 'discussion' : 'task'; }
-  catch { return 'task'; }
-}
-function savedProject() {
-  try {
-    const id = sessionStorage.getItem(activeProjectKey);
-    return id && id !== 'preview' ? id : null;
-  }
-  catch { return null; }
-}
-function savedMilestone() {
-  try {
-    const id = Number(sessionStorage.getItem(activeMilestoneKey));
-    return Number.isSafeInteger(id) && id > 0 ? id : null;
-  } catch { return null; }
-}
-const formatDueDate = (date) => new Date(`${date}T00:00:00`).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-function savedSidebarSection() {
-  try {
-    const saved = localStorage.getItem(sidebarSectionKey);
-    if (saved !== null) return ['projects', 'milestones'].includes(saved) ? saved : null;
-    return localStorage.getItem(milestonesExpandedKey) === 'true' ? 'milestones' : null;
-  } catch { return null; }
-}
-function savedTopic() {
-  try {
-    const id = storedTopicId(sessionStorage.getItem(topicSelectionKey));
-    return isDiscussionId(id) || Number.isSafeInteger(id) && id > 0 ? id : null;
-  } catch { return null; }
-}
 const reactionSymbols = {
   '+1': ['👍', 'Thumbs up'], '-1': ['👎', 'Thumbs down'],
   laugh: ['😄', 'Laugh'], confused: ['😕', 'Confused'], heart: ['❤️', 'Heart'],
@@ -53,8 +16,86 @@ const reactionSymbols = {
 };
 
 export default function App(props = {}) {
+  const defaults = { owner: DEFAULT_OWNER, repo: DEFAULT_REPO };
+  let recent = [];
+  try { recent = readRecentRepositories(localStorage); } catch { /* Storage is optional. */ }
+  let initial = defaults;
+  try {
+    const requested = new URL(window.location.href).searchParams.get('repo');
+    if (requested) initial = parseRepository(requested);
+    else {
+      const saved = sessionStorage.getItem('blackboard:active-repository');
+      if (saved) initial = parseRepository(saved);
+    }
+  } catch { /* Invalid saved selections fall back to local configuration. */ }
+  const [repository, setRepository] = createSignal(initial);
+  const [repositories, setRepositories] = createSignal(recent);
+  const sessionState = new Map();
+  function connect(next) {
+    const previous = repository().owner && repository().repo ? recentRepositories(repositories(), repository()) : repositories();
+    const updated = recentRepositories(previous, next);
+    setRepositories(updated);
+    try {
+      localStorage.setItem('blackboard:recent-repositories', JSON.stringify(updated));
+      sessionStorage.setItem('blackboard:active-repository', repositoryName(next));
+    } catch { /* Switching still works without browser storage. */ }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('repo', repositoryName(next));
+      history.replaceState(null, '', url);
+    } catch { /* URL updates are optional. */ }
+    setRepository(next);
+  }
+  return <Show when={repository()} keyed>{(selected) => <Workspace repository={selected} recent={repositories()} onConnect={connect}
+    sessionState={sessionState} discussionsEnabled={props.discussionsEnabled} />}</Show>;
+}
+
+function Workspace(props) {
+  const GITHUB_OWNER = props.repository.owner;
+  const GITHUB_REPO = props.repository.repo;
+  const isConfigured = Boolean(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
+  const topicSelectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:topic`;
+  const milestonesExpandedKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestones-expanded`;
+  const sidebarSectionKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:sidebar-section`;
+  const activeMilestoneKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestone`;
+  const activeProjectKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:project`;
+  const topicKindKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:new-topic-kind`;
+  const storedTopicId = (value) => isDiscussionId(value) ? value : Number(value);
+  const compareMessages = (a, b) => a.time - b.time || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+  function savedTopicKind() {
+    try { return localStorage.getItem(topicKindKey) === 'discussion' ? 'discussion' : 'task'; }
+    catch { return 'task'; }
+  }
+  function savedProject() {
+    try {
+      const id = sessionStorage.getItem(activeProjectKey);
+      return id && id !== 'preview' ? id : null;
+    }
+    catch { return null; }
+  }
+  function savedMilestone() {
+    try {
+      const id = Number(sessionStorage.getItem(activeMilestoneKey));
+      return Number.isSafeInteger(id) && id > 0 ? id : null;
+    } catch { return null; }
+  }
+  const formatDueDate = (date) => new Date(`${date}T00:00:00`).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+  function savedSidebarSection() {
+    try {
+      const saved = localStorage.getItem(sidebarSectionKey);
+      if (saved !== null) return ['projects', 'milestones'].includes(saved) ? saved : null;
+      return localStorage.getItem(milestonesExpandedKey) === 'true' ? 'milestones' : null;
+    } catch { return null; }
+  }
+  function savedTopic() {
+    try {
+      const id = storedTopicId(sessionStorage.getItem(topicSelectionKey));
+      return isDiscussionId(id) || Number.isSafeInteger(id) && id > 0 ? id : null;
+    } catch { return null; }
+  }
+
   const discussionsEnabled = props.discussionsEnabled === true;
-  const api = createGitHubClient();
+  const api = createGitHubClient({ owner: GITHUB_OWNER, repo: GITHUB_REPO });
   const topicTracker = createTopicTracker();
   const milestoneTracker = createMilestoneTracker();
   const [topics, setTopics] = createSignal([]);
@@ -124,7 +165,15 @@ export default function App(props = {}) {
     } catch { /* Selection still works when browser storage is unavailable. */ }
   });
   const [messages, setMessages] = createSignal({});
-  const [drafts, setDrafts] = createSignal({});
+  const workspaceKey = repositoryKey(props.repository);
+  const draftKey = `blackboard:${workspaceKey}:drafts`;
+  let restoredDrafts = props.sessionState.get(workspaceKey)?.drafts || {};
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(draftKey) || 'null');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) restoredDrafts = Object.fromEntries(Object.entries(saved).filter(([, value]) => typeof value === 'string'));
+  } catch { /* Drafts still survive workspace switches in memory. */ }
+  const [drafts, setDrafts] = createSignal(restoredDrafts);
+  createEffect(() => { try { sessionStorage.setItem(draftKey, JSON.stringify(drafts())); } catch { /* Storage is optional. */ } });
   const [creating, setCreating] = createSignal(false);
   const [createUncertain, setCreateUncertain] = createSignal(false);
   const [pendingTopic, setPendingTopic] = createSignal(null);
@@ -141,7 +190,14 @@ export default function App(props = {}) {
   const [reactionBusy, setReactionBusy] = createSignal(false);
   const [reactionError, setReactionError] = createSignal('');
   const ownReaction = (type) => reactionRecords().find((entry) => entry.type === type && entry.author === reactionViewer());
-  const [outbox, setOutbox] = createSignal({});
+  const [outbox, setOutbox] = createSignal(props.sessionState.get(workspaceKey)?.outbox || {});
+  const [projectWriting, setProjectWriting] = createSignal(false);
+  const switchingDisabled = () => creating() || milestoneSaving() || milestoneStateBusy() || reactionBusy() || projectWriting()
+    || Object.values(assignmentBusy()).some(Boolean)
+    || Object.values(closing()).some((change) => change?.status === 'pending')
+    || Object.values(tagOperations()).some((operation) => operation?.status === 'pending')
+    || Object.values(outbox()).some((entry) => entry?.state === 'pending');
+  onCleanup(() => props.sessionState.set(workspaceKey, { drafts: drafts(), outbox: outbox() }));
   const [error, setError] = createSignal('');
   const [syncing, setSyncing] = createSignal(false);
   const [syncFailed, setSyncFailed] = createSignal(false);
@@ -767,10 +823,7 @@ export default function App(props = {}) {
   return (
     <section class="app-shell">
       <aside class="sidebar" aria-label="Chat topics">
-        <header class="workspace-header">
-          <span class="workspace-icon" aria-hidden="true">ab</span>
-          <div><h1>AbClient</h1><span class="muted">People &amp; agents</span></div>
-        </header>
+        <RepositorySelector repository={props.repository} recent={props.recent} onConnect={props.onConnect} switchDisabled={switchingDisabled()} />
         <div class="sidebar-actions">
           <button
             ref={newTopicButton}
@@ -1024,12 +1077,12 @@ export default function App(props = {}) {
             />
             <button type="submit" disabled={!draft().trim() || Boolean(outgoing())}>Send <span aria-hidden="true">↗</span></button>
           </div>
-          <p class="composer-hint">Enter to send · Shift + Enter for a new line <span>{GITHUB_OWNER}/{GITHUB_REPO} · Polling every {POLL_INTERVAL_MS / 1000}s</span></p>
+          <p class="composer-hint">Enter to send · Shift + Enter for a new line <span>{GITHUB_OWNER}/{GITHUB_REPO}</span></p>
         </form>
       </section>
       </Show>
       </Show>
-      }>{(id) => <ProjectBoard api={api} projectId={id} projectName={projects().find((item) => item.id === id)?.name} topics={topics().filter((item) => item.kind !== 'discussion')} onOpenTopic={(topicId) => selectTopic(topicId, id)}
+      }>{(id) => <ProjectBoard onBusyChange={setProjectWriting} api={api} projectId={id} projectName={projects().find((item) => item.id === id)?.name} topics={topics().filter((item) => item.kind !== 'discussion')} onOpenTopic={(topicId) => selectTopic(topicId, id)}
         onTopicUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((topic) => topic.id === updated.id)?.parentId ?? null })} />}</Show>
       <dialog ref={milestoneDialog} class="topic-status-dialog milestone-dialog" aria-labelledby="milestone-form-title"
         onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, milestoneSaving())}

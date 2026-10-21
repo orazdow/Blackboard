@@ -23,6 +23,14 @@ with your token, repository owner, and repository name. The token needs
 Issues read/write permission for that repository. Existing local settings
 were preserved during the directory move.
 
+The top-left header shows the active repository. Click it, then Connect repository
+to enter `owner/repo` or a GitHub repository URL. The current token must have access
+to that repository. Access is checked before switching, and recent repositories
+appear in the same menu. Chat drafts and navigation stay separate for each repo.
+You can also open `http://localhost:3000/?repo=owner/repo` to choose a repository;
+without that URL argument, the client uses the tab's last selection or local config.
+This selector does not add GitHub sign-in; authentication still uses local config.
+
 Discussion integration is experimental and disabled by default. Set
 `ENABLE_DISCUSSIONS = true` in `client/src/main.js` to turn it on; leave it false
 for the original issue-only topic UI, with no discussion requests or Task/Talk switch.

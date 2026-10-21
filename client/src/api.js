@@ -77,14 +77,21 @@ export function createGitHubClient({
     return result;
   }
 
-  function nextPage(link) {
+  function nextPage(link, path) {
     const next = /<([^>]+)>;\s*rel="next"/.exec(link || '');
     if (!next) return null;
     const url = new URL(next[1]);
-    if (url.origin !== 'https://api.github.com' || !url.pathname.toLowerCase().startsWith(new URL(base).pathname.toLowerCase() + '/')) {
+    const repositoryPath = new URL(base).pathname;
+    const namedRepository = url.pathname.toLowerCase().startsWith(repositoryPath.toLowerCase() + '/');
+    const numericRepository = /^\/repositories\/\d+(\/.*)$/.exec(url.pathname);
+    const resourcePath = namedRepository ? url.pathname.slice(repositoryPath.length) : numericRepository?.[1];
+    if (url.origin !== 'https://api.github.com' || url.username || url.password || !resourcePath || resourcePath !== path.split('?')[0]) {
       throw new GitHubError('GitHub returned an unexpected pagination URL.');
     }
-    return url.href.slice(base.length);
+    // GitHub can use /repositories/<database ID>/... in Link headers. Keep
+    // only the same endpoint and its query, so every page still goes through
+    // our configured owner/repo rather than following an arbitrary repo URL.
+    return `${resourcePath}${url.search}`;
   }
 
   async function performRequest(path, { method = 'GET', body, graphql = false, graphqlRead = false, apiRoot = false, cacheKey = path, authToken = token } = {}) {
@@ -148,7 +155,7 @@ export function createGitHubClient({
       if (!writing) cache.set(cacheKey, {
         data: result, etag: response.headers.get('etag'),
         lastModified: response.headers.get('last-modified'),
-        next: nextPage(response.headers.get('link')), pollAfter, pollInterval,
+        next: nextPage(response.headers.get('link'), path), pollAfter, pollInterval,
       });
       return result;
     } catch (error) {
@@ -341,6 +348,14 @@ export function createGitHubClient({
   }
 
   const api = {
+    async checkRepository() {
+      const repository = await request('');
+      if (!repository?.owner?.login || !repository.name) throw new GitHubError('Could not identify this repository.');
+      if (repository.has_issues === false) throw new GitHubError('Enable Issues in this repository’s GitHub settings before connecting Blackboard.');
+      // Repository visibility alone does not establish access to its Issues API.
+      await request('/issues?state=open&per_page=1');
+      return { owner: repository.owner.login, repo: repository.name };
+    },
     async listDiscussions({ includeClosed = false, includeArchived = false } = {}) {
       const entries = [], visited = new Set();
       let after = null;
