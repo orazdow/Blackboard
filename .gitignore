@@ -5,4 +5,4 @@ client/auth/
 __pycache__/
 client/dist/main.js
 client/dist/main.js.map
-# /docs is the committed, prebuilt GitHub Pages site. Keep it tracked.
+todo.txt
