@@ -1,4 +1,4 @@
-import { createSignal, Show, onCleanup } from 'solid-js';
+import { createSignal, For, Show, onCleanup } from 'solid-js';
 import { createGitHubClient } from './api.js';
 import { normalizeCredentials } from './credentials.js';
 import { parseRepository, repositoryName } from './repository-state.js';
@@ -14,7 +14,7 @@ export default function RepositorySelector(props) {
   const [mode, setMode] = createSignal('permit');
   const [validated, setValidated] = createSignal(null);
   let element, trigger, dialog;
-  let stopped = false, attempt = 0, backdropStart = false, tokensEdited = false;
+  let stopped = false, attempt = 0, tokensEdited = false;
   const closeMenu = () => { if (!dialog?.open) { attempt++; setBusy(false); setOpen(false); setError(''); } };
   const outside = (event) => { if (!element?.contains(event.target)) closeMenu(); };
   const escape = (event) => { if (event.key === 'Escape' && open() && !dialog?.open) { closeMenu(); trigger?.focus(); } };
@@ -22,11 +22,11 @@ export default function RepositorySelector(props) {
   document.addEventListener('keydown', escape);
   onCleanup(() => { stopped = true; attempt++; document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); });
 
-  function openPermit(repository = props.repository, connecting = false) {
+  function openPermit(repository = props.repository, connecting = false, connectedName = '') {
     if (props.switchDisabled) return;
     attempt++; setOpen(false); setBusy(false); setError(''); setValidated(null); tokensEdited = false;
     const saved = props.getCredentials(repository);
-    setAddress(connecting ? '' : repositoryName(repository));
+    setAddress(connecting ? connectedName : repositoryName(repository));
     setToken(saved?.token || (connecting ? props.credentials?.token : '') || '');
     setProjectToken(saved?.projectToken || (connecting ? props.credentials?.projectToken : '') || '');
     setRemember(saved?.remember ?? true);
@@ -86,10 +86,6 @@ export default function RepositorySelector(props) {
     try { props.onForget(); }
     catch (failure) { setError(failure.message); }
   }
-  function outsideDialog(event) {
-    const bounds = dialog.getBoundingClientRect();
-    return event.target === dialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom);
-  }
   function changed() { setValidated(null); setError(''); }
   function restoreSavedCredentials() {
     if (tokensEdited || mode() !== 'connect') return;
@@ -111,14 +107,21 @@ export default function RepositorySelector(props) {
         <span title={repositoryName(props.repository)}>{repositoryName(props.repository)}</span>
         <button type="button" class="repository-permit" disabled={busy() || props.switchDisabled} aria-haspopup="dialog" onClick={() => openPermit()}>{props.permitted ? 'Permitted' : 'Permit'}</button>
       </div>
+      <Show when={props.recentRepositories?.length}>
+        <div class="repository-recents" role="group" aria-label="Recent repositories">
+          <For each={props.recentRepositories}>{(repository) =>
+            <button type="button" disabled={busy() || props.switchDisabled} onClick={() => openPermit(repository, true, repositoryName(repository))}>
+              {repositoryName(repository)}
+            </button>
+          }</For>
+        </div>
+      </Show>
       <button type="button" class="repository-connect" disabled={busy() || props.switchDisabled} aria-haspopup="dialog" onClick={() => openPermit(props.repository, true)}>Connect repository</button>
       <Show when={busy()}><p class="muted">Connecting...</p></Show>
       <Show when={props.switchDisabled}><p class="muted">Waiting for the current change to finish.</p></Show>
       <Show when={error()}><p class="dialog-error" role="alert">{error()}</p></Show>
     </div></Show>
     <dialog ref={dialog} class="topic-status-dialog permit-dialog" aria-labelledby="permit-title"
-      onPointerDown={(event) => { backdropStart = outsideDialog(event); }}
-      onClick={(event) => { if (backdropStart && outsideDialog(event)) dialog.close(); backdropStart = false; }}
       onClose={() => { attempt++; setBusy(false); setToken(''); setProjectToken(''); setValidated(null); setError(''); trigger?.focus(); }}>
       <form onSubmit={permit} aria-busy={busy()}>
         <h2 id="permit-title">{mode() === 'connect' ? 'Connect repository' : 'Permit repository'}</h2>

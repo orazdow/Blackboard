@@ -18,7 +18,7 @@ export function createTopicTracker() {
         if (desired === null) {
           if (!actual) changes.delete(id);
           merged.delete(id);
-        } else if (actual && actual.name === desired.name && actual.state === desired.state && actual.archived === desired.archived && (actual.parentId ?? null) === (desired.parentId ?? null) && (actual.milestoneId ?? null) === (desired.milestoneId ?? null) && sameTags(actual.tags, desired.tags)) {
+        } else if (actual && actual.name === desired.name && actual.kind === desired.kind && actual.description === desired.description && actual.state === desired.state && actual.archived === desired.archived && (actual.parentId ?? null) === (desired.parentId ?? null) && (actual.milestoneId ?? null) === (desired.milestoneId ?? null) && sameTags(actual.tags, desired.tags)) {
           changes.delete(id);
         } else {
           merged.set(id, desired);

@@ -2,8 +2,10 @@ import { batch, createEffect, createSignal, For, Show, onMount, onCleanup } from
 import { createGitHubClient, isDiscussionId } from './api.js';
 import { createCredentialStore } from './credentials.js';
 import ProjectBoard from './project-ui.js';
+import NoteView from './note-ui.js';
+import ListView from './list-ui.js';
 import RepositorySelector from './repository-ui.js';
-import { parseRepository, repositoryKey, repositoryName } from './repository-state.js';
+import { normalizeRecentRepositories, parseRepository, recentRepositoriesAfterConnect, repositoryKey, repositoryName } from './repository-state.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
 import { createMilestoneTracker, sortMilestones } from './milestone-state.js';
@@ -22,6 +24,7 @@ export default function App(props = {}) {
   try { storage = localStorage; } catch { /* In-memory credentials still work. */ }
   const credentials = createCredentialStore(storage);
   const siteSelectionKey = `blackboard:site:${new URL('.', window.location.href).pathname}:active-repository`;
+  const recentRepositoriesKey = `${siteSelectionKey}:recent-repositories`;
   let initial = defaults;
   try {
     const requested = new URL(window.location.href).searchParams.get('repo');
@@ -31,12 +34,20 @@ export default function App(props = {}) {
       if (saved) initial = parseRepository(saved);
     }
   } catch { /* Invalid saved selections fall back to local configuration. */ }
+  let restoredRecentRepositories = [];
+  try { restoredRecentRepositories = normalizeRecentRepositories(JSON.parse(storage?.getItem(recentRepositoriesKey) || '[]'), initial); }
+  catch { /* Recent repositories are optional. */ }
+  const [recentRepositories, setRecentRepositories] = createSignal(restoredRecentRepositories);
   const [connection, setConnection] = createSignal({ repository: initial, credentials: credentials.get(initial) });
   const repository = () => connection().repository;
   const [permitted, setPermitted] = createSignal(false);
   const sessionState = new Map();
   function connect(next, tokens, remember) {
     const saved = credentials.save(next, tokens, remember);
+    const recent = recentRepositoriesAfterConnect(recentRepositories(), repository(), next);
+    setRecentRepositories(recent);
+    try { storage?.setItem(recentRepositoriesKey, JSON.stringify(recent.map(repositoryName))); }
+    catch { /* Repository switching works without saved history. */ }
     try {
       sessionStorage.setItem(siteSelectionKey, repositoryName(next));
     } catch { /* Switching still works without browser storage. */ }
@@ -53,6 +64,7 @@ export default function App(props = {}) {
   }
   return <Show when={connection()} keyed>{(selected) => <Workspace repository={selected.repository} credentials={selected.credentials}
     permitted={permitted()} onConnect={connect} onForget={forget} getCredentials={(repo) => credentials.get(repo)}
+    recentRepositories={recentRepositories()}
     onAccessChange={(value) => { if (connection() === selected) setPermitted(value); }}
     sessionState={sessionState} discussionsEnabled={props.discussionsEnabled} />}</Show>;
 }
@@ -71,8 +83,8 @@ function Workspace(props) {
   const storedTopicId = (value) => isDiscussionId(value) ? value : Number(value);
   const compareMessages = (a, b) => a.time - b.time || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
   function savedTopicKind() {
-    try { return localStorage.getItem(topicKindKey) === 'discussion' ? 'discussion' : 'task'; }
-    catch { return 'task'; }
+    try { const kind = localStorage.getItem(topicKindKey); return ['discussion', 'note', 'list'].includes(kind) ? kind : 'talk'; }
+    catch { return 'talk'; }
   }
   function savedProject() {
     try {
@@ -154,7 +166,7 @@ function Workspace(props) {
   });
   const [creatingTopic, setCreatingTopic] = createSignal(false);
   const [topicKind, setTopicKind] = createSignal(savedTopicKind());
-  const creationKind = () => !discussionsEnabled || topicParent() ? 'task' : topicKind();
+  const creationKind = () => topicKind() === 'discussion' && (!discussionsEnabled || topicParent()) ? 'talk' : topicKind();
   function chooseTopicKind(kind) {
     setTopicKind(kind);
     try { localStorage.setItem(topicKindKey, kind); } catch { /* Storage is optional. */ }
@@ -200,7 +212,10 @@ function Workspace(props) {
   const ownReaction = (type) => reactionRecords().find((entry) => entry.type === type && entry.author === reactionViewer());
   const [outbox, setOutbox] = createSignal(props.sessionState.get(workspaceKey)?.outbox || {});
   const [projectWriting, setProjectWriting] = createSignal(false);
+  const [noteWriting, setNoteWriting] = createSignal(false);
+  const [listWriting, setListWriting] = createSignal(false);
   const switchingDisabled = () => creating() || milestoneSaving() || milestoneStateBusy() || reactionBusy() || projectWriting()
+    || noteWriting() || listWriting()
     || Object.values(assignmentBusy()).some(Boolean)
     || Object.values(closing()).some((change) => change?.status === 'pending')
     || Object.values(tagOperations()).some((operation) => operation?.status === 'pending')
@@ -346,7 +361,7 @@ function Workspace(props) {
         setMilestones(milestoneTracker.reconcile(incomingMilestones));
         setMilestonesLoaded(true);
       }
-      if (activeMilestoneId() === null && activeProjectId() === null) await loadMessages(activeId());
+      if (activeMilestoneId() === null && activeProjectId() === null && !['note', 'list'].includes(topic()?.kind)) await loadMessages(activeId());
       if (projectsExpanded() || activeProjectId() || returnProjectId()) loadProjects();
       failures = 0;
       nextAttempt = 0;
@@ -395,7 +410,9 @@ function Workspace(props) {
       return next;
     });
     setActiveId(id);
-    try { await loadMessages(id); } catch (failure) { if (!stopped) setError(failure.message); }
+    if (!['note', 'list'].includes(topics().find((item) => item.id === id)?.kind)) {
+      try { await loadMessages(id); } catch (failure) { if (!stopped) setError(failure.message); }
+    }
   }
 
   function selectMilestone(id) {
@@ -597,8 +614,9 @@ function Workspace(props) {
   }
 
   function TopicMarker(props) {
-    return <span class="channel-hash" title={props.discussion ? 'Discussion' : 'Task'} aria-label={props.discussion ? 'Discussion' : 'Task'}>
-      <Show when={props.discussion} fallback="#"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z" /></svg></Show>
+    const type = props.kind === 'note' ? 'Note' : props.kind === 'list' ? 'List' : props.kind === 'discussion' ? 'Discussion' : 'Talk';
+    return <span class="channel-hash" title={type} aria-label={type}>
+      <Show when={props.kind === 'list'} fallback={<Show when={props.kind === 'note'} fallback={<Show when={props.kind === 'discussion'} fallback="#"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z" /></svg></Show>}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8" /></svg></Show>}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h3v3H4zM4 11h3v3H4zM4 17h3v3H4zM10 6h10M10 12h10M10 18h10" /></svg></Show>
     </span>;
   }
 
@@ -704,7 +722,7 @@ function Workspace(props) {
     setPendingTopic({ name, parentId, kind, status: 'creating' });
     setError('');
     try {
-      const created = topicTracker.remember(await (kind === 'discussion' ? api.createDiscussion({ name }) : api.createChannel({ name, parentId })));
+      const created = topicTracker.remember(await (kind === 'discussion' ? api.createDiscussion({ name }) : api.createChannel({ name, parentId, kind })));
       channelRevision += 1;
       batch(() => {
         setTopics((previous) => [...previous.filter((item) => item.id !== created.id), created]);
@@ -834,7 +852,8 @@ function Workspace(props) {
     <section class="app-shell">
       <aside class="sidebar" aria-label="Chat topics">
         <RepositorySelector repository={props.repository} credentials={props.credentials} permitted={props.permitted}
-          getCredentials={props.getCredentials} onConnect={props.onConnect} onForget={props.onForget} switchDisabled={switchingDisabled()} />
+          getCredentials={props.getCredentials} onConnect={props.onConnect} onForget={props.onForget}
+          recentRepositories={props.recentRepositories} switchDisabled={switchingDisabled()} />
         <div class="sidebar-actions">
           <button
             ref={newTopicButton}
@@ -856,12 +875,14 @@ function Workspace(props) {
                 value={topicName()} disabled={creating() || createUncertain()}
                 ref={(element) => requestAnimationFrame(() => element.focus())}
                 onInput={(event) => setTopicName(event.currentTarget.value)} />
-              <div class="new-topic-form-actions">
-              <Show when={discussionsEnabled}><fieldset class="topic-kind-options" disabled={creating() || createUncertain() || Boolean(topicParent())}>
+              <fieldset class="topic-kind-options" classList={{ 'with-discussions': discussionsEnabled && !topicParent() }} disabled={creating() || createUncertain()}>
                 <legend class="sr-only">Topic type</legend>
-                <label><input type="radio" name="topicKind" value="task" checked={creationKind() === 'task'} onChange={() => chooseTopicKind('task')} /><span>Task</span></label>
-                <label><input type="radio" name="topicKind" value="discussion" checked={creationKind() === 'discussion'} onChange={() => chooseTopicKind('discussion')} /><span>Talk</span></label>
-              </fieldset></Show>
+                <label><input type="radio" name="topicKind" value="talk" checked={creationKind() === 'talk'} onChange={() => chooseTopicKind('talk')} /><span>Talk</span></label>
+                <label><input type="radio" name="topicKind" value="list" checked={creationKind() === 'list'} onChange={() => chooseTopicKind('list')} /><span>List</span></label>
+                <label><input type="radio" name="topicKind" value="note" checked={creationKind() === 'note'} onChange={() => chooseTopicKind('note')} /><span>Note</span></label>
+                <Show when={discussionsEnabled && !topicParent()}><label><input type="radio" name="topicKind" value="discussion" checked={creationKind() === 'discussion'} onChange={() => chooseTopicKind('discussion')} /><span>Discussion</span></label></Show>
+              </fieldset>
+              <div class="new-topic-form-actions">
                 <button type="button" class="cancel-topic-button" disabled={creating()} onClick={closeTopicForm}>Cancel</button>
                 <button type="submit" disabled={!topicName().trim() || creating() || createUncertain()}>{creating() ? 'Creating…' : createUncertain() ? 'Unconfirmed' : 'Create'}</button>
               </div>
@@ -891,7 +912,7 @@ function Workspace(props) {
               aria-current={activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined}
               onClick={() => selectTopic(item.id)}
             >
-              <TopicMarker discussion={item.kind === 'discussion'} />{item.name}
+              <TopicMarker kind={item.kind} />{item.name}
               <Show when={closing()[item.id] || item.state === 'closed'}><small role="status">{statusLabel(item.id) || 'Closed'}</small></Show>
             </button>
             <Show when={item.kind !== 'discussion'}><button type="button" class="add-subtopic-button" disabled={Boolean(closing()[item.id]) || creating() || createUncertain() || !isConfigured}
@@ -906,7 +927,7 @@ function Workspace(props) {
             <div class="channel-row is-pending" style={{ 'margin-left': pending().parentId ? `${Math.min((visibleTopics().find((item) => item.id === pending().parentId)?.depth ?? 0) + 1, 5) * 16}px` : '0' }} aria-busy={pending().status === 'creating'}>
               <span class="topic-expand" aria-hidden="true" />
               <div class="channel-button">
-                <TopicMarker discussion={pending().kind === 'discussion'} />{pending().name}
+                <TopicMarker kind={pending().kind} />{pending().name}
                 <small role="status">{pending().status === 'creating' ? 'Creating…' : 'Unconfirmed'}</small>
               </div>
             </div>
@@ -966,10 +987,10 @@ function Workspace(props) {
           <button type="button" disabled={!isConfigured || syncing()} onClick={() => startTopic()}>New topic</button>
         </section>
       }>
-      <section class="chat-panel" aria-label={`${topic().name} chat`}>
+      <section class="chat-panel" aria-label={`${topic().name} ${['note', 'list'].includes(topic().kind) ? topic().kind : 'chat'}`}>
         <header class="chat-header">
-          <h2><TopicMarker discussion={topic().kind === 'discussion'} /> {topic().name}</h2>
-          <p class="muted">{topic().description}</p>
+          <h2><TopicMarker kind={topic().kind} /> {topic().name}</h2>
+          <Show when={!['note', 'list'].includes(topic().kind)}><p class="muted">{topic().description}</p></Show>
           <div class="chat-header-actions">
             <a class="preview-badge" href={topic().url} target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
@@ -1031,9 +1052,10 @@ function Workspace(props) {
             </form>
           </Show>
         </div>
+        <Show when={!['note', 'list'].includes(topic().kind)}>
         <div ref={messageList} class="message-list" role="log" aria-label="Messages" aria-live="polite" aria-relevant="additions">
           <div class="conversation-start">
-            <span class="conversation-icon" aria-hidden="true"><TopicMarker discussion={topic().kind === 'discussion'} /></span>
+            <span class="conversation-icon" aria-hidden="true"><TopicMarker kind={topic().kind} /></span>
             <h3>Welcome to {topic().kind === 'discussion' ? '' : '#'}{topic().name}</h3>
             <p class="muted">The beginning of this conversation.</p>
           </div>
@@ -1090,6 +1112,15 @@ function Workspace(props) {
           </div>
           <p class="composer-hint">Enter to send · Shift + Enter for a new line <span>{GITHUB_OWNER}/{GITHUB_REPO}</span></p>
         </form>
+        </Show>
+        <Show when={topic().kind === 'note' ? topic().id : null} keyed>{() =>
+          <NoteView topic={topic()} api={api} draftKey={`blackboard:${workspaceKey}:note:${topic().id}:draft`} onBusyChange={setNoteWriting}
+            onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null })} />
+        }</Show>
+        <Show when={topic().kind === 'list' ? topic().id : null} keyed>{() =>
+          <ListView topic={topic()} api={api} draftKey={`blackboard:${workspaceKey}:list:${topic().id}:draft`} onBusyChange={setListWriting}
+            onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null })} />
+        }</Show>
       </section>
       </Show>
       </Show>

@@ -1,5 +1,8 @@
 export const CHANNEL_PREFIX = '💬 ';
 export const ARCHIVED_LABEL = 'blackboard:archived';
+export const TALK_LABEL = 'blackboard:type:talk';
+export const NOTE_LABEL = 'blackboard:type:note';
+export const LIST_LABEL = 'blackboard:type:list';
 const REACTION_TYPES = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
 const REACTION_ENUMS = ['THUMBS_UP', 'THUMBS_DOWN', 'LAUGH', 'CONFUSED', 'HEART', 'HOORAY', 'ROCKET', 'EYES'];
 export const isDiscussionId = (id) => typeof id === 'string' && /^discussion:[A-Za-z0-9_=-]{1,256}$/.test(id);
@@ -60,10 +63,10 @@ export function createGitHubClient({
   function request(path, options = {}) {
     const reading = options.graphqlRead || !options.method || options.method === 'GET';
     const key = options.graphqlRead ? `graphql:${JSON.stringify(options.body)}` : path;
-    if (reading && inFlight.has(key)) return inFlight.get(key);
+    if (reading && !options.fresh && inFlight.has(key)) return inFlight.get(key);
     const result = queue.then(() => performRequest(path, { ...options, cacheKey: key }));
     queue = result.catch(() => {});
-    if (reading) {
+    if (reading && !options.fresh) {
       inFlight.set(key, result);
       result.finally(() => inFlight.delete(key)).catch(() => {});
     }
@@ -87,12 +90,12 @@ export function createGitHubClient({
     return `${resourcePath}${url.search}`;
   }
 
-  async function performRequest(path, { method = 'GET', body, graphql = false, graphqlRead = false, apiRoot = false, cacheKey = path, authToken = token } = {}) {
+  async function performRequest(path, { method = 'GET', body, graphql = false, graphqlRead = false, apiRoot = false, cacheKey = path, authToken = token, fresh = false } = {}) {
     if (!authToken || !owner || !repo) throw new GitHubError('Permit this repository with a GitHub token before connecting.');
     if (Date.now() < retryAt) throw new GitHubError('GitHub rate limit reached. Waiting before another request.', { retryAt });
     const writing = method !== 'GET' && !graphqlRead;
     const cached = writing ? null : cache.get(cacheKey);
-    if (cached && Date.now() < cached.pollAfter) return cached.data;
+    if (cached && !fresh && Date.now() < cached.pollAfter) return cached.data;
     if (writing) {
       const wait = Math.max(0, lastWriteAt + minWriteInterval - Date.now());
       if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
@@ -269,15 +272,18 @@ export function createGitHubClient({
     color: typeof label !== 'string' && /^[0-9a-f]{6}$/i.test(label.color) ? label.color : '52769b',
     description: typeof label === 'string' ? '' : label.description || '',
   });
-  const topicTags = (labels) => labels.map(tag).filter((item) => item.name.toLowerCase() !== ARCHIVED_LABEL.toLowerCase());
+  const topicTags = (labels) => labels.map(tag).filter((item) => ![ARCHIVED_LABEL, TALK_LABEL, NOTE_LABEL, LIST_LABEL].includes(item.name.toLowerCase()));
   const tagName = (name) => {
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 50 || /[\x00-\x1f\x7f]/.test(name)) throw new GitHubError('Tag names must contain 1–50 characters.');
     const trimmed = name.trim();
-    if (trimmed.toLowerCase() === ARCHIVED_LABEL.toLowerCase()) throw new GitHubError('Use Archive to archive a topic.');
+    if (trimmed.toLowerCase() === ARCHIVED_LABEL.toLowerCase() || trimmed.toLowerCase().startsWith('blackboard:type:')) throw new GitHubError('That label is reserved for Blackboard.');
     return trimmed;
   };
+  const hasLabel = (issue, name) => (issue.labels || []).some((label) => (typeof label === 'string' ? label : label.name).toLowerCase() === name);
+  const isNote = (issue) => hasLabel(issue, NOTE_LABEL);
+  const isList = (issue) => hasLabel(issue, LIST_LABEL);
   const channel = (issue) => ({
-    id: issue.number, name: issue.title.slice(CHANNEL_PREFIX.length),
+    id: issue.number, kind: isList(issue) ? 'list' : isNote(issue) ? 'note' : 'talk', name: issue.title.startsWith(CHANNEL_PREFIX) ? issue.title.slice(CHANNEL_PREFIX.length) : issue.title,
     description: issue.body || '', state: issue.state, url: issue.html_url,
     parentId: null,
     milestoneId: issue.milestone?.number ?? null,
@@ -298,7 +304,18 @@ export function createGitHubClient({
     return `/issues/comments/${commentId}/reactions`;
   };
   const reaction = (entry) => ({ id: entry.id, type: entry.content, author: entry.user.login });
-  const isTopic = (issue) => !issue.pull_request && issue.title.startsWith(CHANNEL_PREFIX);
+  const isTopic = (issue) => !issue.pull_request && (issue.title.startsWith(CHANNEL_PREFIX) || [TALK_LABEL, NOTE_LABEL, LIST_LABEL].some((name) => hasLabel(issue, name)));
+  async function readDocument(id, kind) {
+    const issue = await request(issuePath(id), { fresh: true });
+    if (issue.pull_request || channel(issue).kind !== kind) throw new GitHubError(`This issue is not a Blackboard ${kind}.`);
+    return channel(issue);
+  }
+  async function updateDocument(id, kind, body, expectedBody) {
+    if (typeof body !== 'string') throw new GitHubError('Content must be text.');
+    const current = await readDocument(id, kind);
+    if (current.description !== expectedBody) throw new GitHubError(`This ${kind} changed on GitHub. Review the latest version before saving.`);
+    return channel(await request(issuePath(id), { method: 'PATCH', body: { body } }));
+  }
   const isLocal = (issue) => !issue.repository_url || issue.repository_url.toLowerCase() === base.toLowerCase();
   const subIssues = (id) => listAll(`${issuePath(id)}/sub_issues`);
   const milestonePath = (id) => {
@@ -548,7 +565,7 @@ export function createGitHubClient({
             nodes { id isArchived
               fieldValueByName(name:$statusName) { ... on ProjectV2ItemFieldSingleSelectValue { optionId name } }
               content { __typename
-                ... on Issue { id number title body url state repository { nameWithOwner } }
+                ... on Issue { id number title body url state labels(first:100) { nodes { name } } repository { nameWithOwner } }
                 ... on PullRequest { id number title url state repository { nameWithOwner } }
                 ... on DraftIssue { id title body }
               }
@@ -560,9 +577,10 @@ export function createGitHubClient({
         if (!connection) throw new GitHubError('Could not read project items.');
         for (const item of connection.nodes.filter((item) => item && !item.isArchived)) {
           const content = item.content;
-          const localTopic = content?.__typename === 'Issue' && content.repository?.nameWithOwner.toLowerCase() === `${owner}/${repo}`.toLowerCase() && content.title.startsWith(CHANNEL_PREFIX);
+          const localTopic = content?.__typename === 'Issue' && content.repository?.nameWithOwner.toLowerCase() === `${owner}/${repo}`.toLowerCase()
+            && (content.title.startsWith(CHANNEL_PREFIX) || (content.labels?.nodes || []).some((label) => [TALK_LABEL, NOTE_LABEL, LIST_LABEL].includes(label.name.toLowerCase())));
           items.push({
-            id: item.id, contentId: content?.id, title: localTopic ? content.title.slice(CHANNEL_PREFIX.length) : content?.title || 'Unavailable item',
+            id: item.id, contentId: content?.id, title: localTopic && content.title.startsWith(CHANNEL_PREFIX) ? content.title.slice(CHANNEL_PREFIX.length) : content?.title || 'Unavailable item',
             type: content?.__typename || 'Unavailable', url: content?.url || null,
             body: content?.body || '',
             number: content?.number ?? null, repository: content?.repository?.nameWithOwner || null,
@@ -597,7 +615,7 @@ export function createGitHubClient({
       const result = await projectQuery(`mutation BlackboardAddTopic($project:ID!,$content:ID!) { addProjectV2ItemById(input:{projectId:$project,contentId:$content}) { item { id } } }`, { project: projectId, content: issue.node_id }, true);
       const id = result.data?.addProjectV2ItemById?.item?.id;
       if (!id) throw new GitHubError('Project addition unconfirmed. Refresh the board before trying again.', { uncertain: true });
-      return { id, channelId, contentId: issue.node_id, title: issue.title.slice(CHANNEL_PREFIX.length), type: 'Issue', number: channelId, url: issue.html_url, repository: `${owner}/${repo}`, state: issue.state.toUpperCase(), statusId: null };
+      return { id, channelId, contentId: issue.node_id, title: channel(issue).name, type: 'Issue', number: channelId, url: issue.html_url, repository: `${owner}/${repo}`, state: issue.state.toUpperCase(), statusId: null };
     },
     async createProjectDraft(projectId, { title, body = '', fieldId = null, statusId = null }) {
       nodeId(projectId);
@@ -644,7 +662,7 @@ export function createGitHubClient({
       if (typeof name !== 'string' || !name.trim()) throw new GitHubError('A topic name is required.');
       const current = await request(path);
       if (!isTopic(current)) throw new GitHubError('Only Blackboard topics can be edited.');
-      return channel(await request(path, { method: 'PATCH', body: { title: CHANNEL_PREFIX + name.trim(), body: description } }));
+      return channel(await request(path, { method: 'PATCH', body: { title: [TALK_LABEL, NOTE_LABEL, LIST_LABEL].some((label) => hasLabel(current, label)) ? name.trim() : CHANNEL_PREFIX + name.trim(), body: description } }));
     },
     async changeProjectColumn(projectId, { id = null, name, color = 'GRAY', description = '', direction = null, remove = false }) {
       nodeId(projectId);
@@ -815,13 +833,18 @@ export function createGitHubClient({
       }
       return [...channels.values()].filter((item) => includeArchived || !item.archived);
     },
-    async createChannel({ name, topic = '', parentId = null }) {
+    async createChannel({ name, topic = '', parentId = null, kind = 'talk' }) {
       if (!name.trim()) throw new GitHubError('A topic name is required.');
+      if (!['talk', 'task', 'note', 'list'].includes(kind)) throw new GitHubError('Invalid topic type.');
       if (parentId !== null) {
         const parent = await request(issuePath(parentId));
         if (!isTopic(parent)) throw new GitHubError('The parent must be a Blackboard topic.');
       }
-      const created = await request('/issues', { method: 'POST', body: { title: CHANNEL_PREFIX + name.trim(), body: topic } });
+      const typeLabel = kind === 'note' ? NOTE_LABEL : kind === 'list' ? LIST_LABEL : TALK_LABEL;
+      await ensureLabel(typeLabel);
+      const created = await request('/issues', { method: 'POST', body: {
+        title: name.trim(), body: topic, labels: [typeLabel],
+      } });
       if (parentId !== null) {
         try {
           await request(`${issuePath(parentId)}/sub_issues`, { method: 'POST', body: { sub_issue_id: created.id } });
@@ -833,6 +856,14 @@ export function createGitHubClient({
       }
       return { ...channel(created), parentId };
     },
+    async readNote(id) {
+      return readDocument(id, 'note');
+    },
+    async updateNote(id, body, expectedBody) {
+      return updateDocument(id, 'note', body, expectedBody);
+    },
+    async readList(id) { return readDocument(id, 'list'); },
+    async updateList(id, body, expectedBody) { return updateDocument(id, 'list', body, expectedBody); },
     async closeChannel(id) {
       if (isDiscussionId(id)) return discussionState(id, true);
       return channel(await request(issuePath(id), { method: 'PATCH', body: { state: 'closed', state_reason: 'not_planned' } }));
@@ -890,7 +921,7 @@ export function createGitHubClient({
         return { id, deleted: true };
       }
       const issue = await request(issuePath(id));
-      if (issue.pull_request || !issue.title.startsWith(CHANNEL_PREFIX) || !issue.node_id) {
+      if (!isTopic(issue) || !issue.node_id) {
         throw new GitHubError('Only Blackboard topic issues can be deleted.');
       }
       const result = await request('', { graphql: true, method: 'POST', body: {
