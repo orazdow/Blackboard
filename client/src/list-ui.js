@@ -90,6 +90,11 @@ export default function ListView(props) {
     <Show when={error()}><p class="list-error" role="alert">{error()}</p></Show>
     <Show when={uncertain()}><button type="button" class="list-check-save" disabled={busy()} onClick={checkSave}>Check GitHub before trying again</button></Show>
     <Show when={sourceEditing()} fallback={<>
+      <form class="list-add" onSubmit={(event) => { event.preventDefault(); if (newItem().trim()) write(appendChecklistItem(props.topic.description, newItem()), () => setNewItem('')); }}>
+        <input type="text" aria-label="New list item" placeholder="Add an item" value={newItem()} maxLength="500" disabled={busy() || uncertain()}
+          onInput={(event) => setNewItem(event.currentTarget.value)} />
+        <button type="submit" disabled={busy() || uncertain() || !newItem().trim()}>Add</button>
+      </form>
       <div class="list-items">
         <Show when={parsed().items.length} fallback={<p class="muted">No items yet.</p>}>
           <For each={parsed().items}>{(item) => <div class="list-item" classList={{ 'is-pending': busy() }}>
@@ -112,11 +117,6 @@ export default function ListView(props) {
           <p class="list-other-content">This list also contains other Markdown. Use Edit Markdown to view or change it.</p>
         </Show>
       </div>
-      <form class="list-add" onSubmit={(event) => { event.preventDefault(); if (newItem().trim()) write(appendChecklistItem(props.topic.description, newItem()), () => setNewItem('')); }}>
-        <input type="text" aria-label="New list item" placeholder="Add an item" value={newItem()} maxLength="500" disabled={busy() || uncertain()}
-          onInput={(event) => setNewItem(event.currentTarget.value)} />
-        <button type="submit" disabled={busy() || uncertain() || !newItem().trim()}>Add</button>
-      </form>
     </>}>
       <form class="list-source-editor" onSubmit={(event) => { event.preventDefault(); write(sourceDraft(), () => { clearSourceDraft(); setSourceEditing(false); }, sourceBase()); }}>
         <textarea aria-label="List Markdown" value={sourceDraft()} disabled={busy() || uncertain()}

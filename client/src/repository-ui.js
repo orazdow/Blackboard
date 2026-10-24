@@ -28,7 +28,7 @@ export default function RepositorySelector(props) {
     const saved = props.getCredentials(repository);
     setAddress(connecting ? connectedName : repositoryName(repository));
     setToken(saved?.token || (connecting ? props.credentials?.token : '') || '');
-    setProjectToken(saved?.projectToken || (connecting ? props.credentials?.projectToken : '') || '');
+    setProjectToken(saved?.projectToken || (props.projectsEnabled && connecting ? props.credentials?.projectToken : '') || '');
     setRemember(saved?.remember ?? true);
     setMode(connecting ? 'connect' : 'permit');
     dialog.showModal();
@@ -56,7 +56,7 @@ export default function RepositorySelector(props) {
       const api = createGitHubClient({ ...repository, ...credentials });
       const canonical = await api.checkRepository();
       if (stopped || version !== attempt) return;
-      if (credentials.projectToken) {
+      if (props.projectsEnabled && credentials.projectToken) {
         try { await createGitHubClient({ ...canonical, ...credentials }).listProjects(); }
         catch (failure) {
           if (!stopped && version === attempt) {
@@ -131,9 +131,9 @@ export default function RepositorySelector(props) {
         <label for="permit-token">Repository token</label>
         <input id="permit-token" type="password" required autocomplete="off" spellcheck="false" value={token()} disabled={busy()}
           onInput={(event) => { tokensEdited = true; setToken(event.currentTarget.value); changed(); }} />
-        <label for="permit-project-token">Projects token <span class="muted">(optional)</span></label>
+        <Show when={props.projectsEnabled}><label for="permit-project-token">Projects token <span class="muted">(optional)</span></label>
         <input id="permit-project-token" type="password" autocomplete="off" spellcheck="false" value={projectToken()} disabled={busy()}
-          onInput={(event) => { tokensEdited = true; setProjectToken(event.currentTarget.value); changed(); }} />
+          onInput={(event) => { tokensEdited = true; setProjectToken(event.currentTarget.value); changed(); }} /></Show>
         <label class="permit-remember"><input type="checkbox" checked={remember()} disabled={busy()} onChange={(event) => setRemember(event.currentTarget.checked)} /> Remember on this browser</label>
         <Show when={error()}><p class="dialog-error" role="alert">{error()}</p></Show>
         <Show when={mode() === 'permit' && props.credentials?.token}><button type="button" class="permit-forget" disabled={busy() || props.switchDisabled} onClick={forget}>Forget credentials</button></Show>

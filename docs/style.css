@@ -320,8 +320,6 @@ textarea::placeholder {
 .milestone-edit-button { padding: var(--space-1) var(--space-3); font-size: 0.8rem; background: #1a2e40; color: var(--color-text); }
 .milestone-due { color: var(--color-muted); margin-top: var(--space-4); font-size: 0.85rem; }
 .milestone-progress-label { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-6) 0 var(--space-3); font-size: 0.85rem; }
-.milestone-progress-label span, .milestone-progress-note { color: var(--color-muted); }
-.milestone-progress-note { margin-top: var(--space-2); font-size: 0.75rem; }
 .milestone-topics-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-8) 0 var(--space-3); }
 .milestone-topics-heading h3 { margin: 0; font-size: 1rem; }
 .milestone-topics-heading select, .topic-milestone-select select { min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: 6px; background: #132332; color: var(--color-muted); font: inherit; font-size: 0.8rem; }
@@ -332,9 +330,12 @@ textarea::placeholder {
 .topic-milestone-select:focus-within { outline: 1px solid rgb(119 166 230 / 50%); outline-offset: 2px; }
 .milestone-topic-list { display: grid; gap: var(--space-1); }
 .milestone-topic-row { display: flex; align-items: center; border-bottom: 1px solid var(--color-border); }
-.milestone-topic-link { display: flex; align-items: baseline; justify-content: space-between; flex: 1; min-width: 0; gap: var(--space-3); padding: var(--space-3); background: transparent; color: var(--color-text); text-align: left; overflow-wrap: anywhere; }
+.milestone-topic-link { display: flex; align-items: center; justify-content: space-between; flex: 1; min-width: 0; gap: var(--space-3); padding: var(--space-3); background: transparent; color: var(--color-text); text-align: left; overflow-wrap: anywhere; }
 .milestone-topic-link:hover { background: #192e46; }
 .milestone-topic-link small { color: var(--color-muted); font-size: 0.75rem; }
+.milestone-task-title { display: inline-flex; align-items: center; min-width: 0; gap: var(--space-2); }
+.milestone-task-title .topic-status-dot { background: #9cddc2; }
+.milestone-task-title .topic-status-dot.is-closed { background: #c9b4ed; }
 .milestone-topic-remove { padding: var(--space-1) var(--space-2); background: transparent; color: var(--color-muted); }
 .milestone-dialog form { display: grid; gap: var(--space-2); }
 .milestone-dialog label { margin-top: var(--space-2); color: var(--color-muted); font-size: 0.8rem; }
@@ -426,10 +427,6 @@ textarea::placeholder {
 .dialog-cancel:hover:not(:disabled) { background: #21394d; }
 .topic-status-dialog .dialog-error { color: #f1c6a7; }
 .message-list { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-8); }
-.conversation-start { margin: var(--space-8) 0; }
-.conversation-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: var(--space-4); border-radius: 14px; background: #15283f; color: var(--color-muted); font-size: 1.8rem; }
-.conversation-start h3 { font-size: 1.5rem; letter-spacing: -0.03em; margin-bottom: var(--space-2); }
-.conversation-start p { font-size: 0.9rem; }
 .message { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) 0; }
 .avatar { display: grid; place-items: center; flex: 0 0 34px; height: 34px; border-radius: 10px; background: #1a2c43; color: #bdd3ee; font-size: 0.8rem; font-weight: 600; }
 .avatar-you { background: #1c3350; color: #c7e0ff; }
@@ -492,5 +489,4 @@ textarea::placeholder {
   .composer { padding: var(--space-3); }
   .composer-box { flex-wrap: wrap; }
   .composer button { margin-left: auto; }
-  .conversation-start h3 { font-size: 1.15rem; }
 }

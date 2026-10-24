@@ -1,11 +1,19 @@
 // List issues remain ordinary GitHub Markdown task lists.
 const TASK_LINE = /^(\s*[-*+]\s+\[)([ xX])(\]\s+)(.*)$/;
+const FENCE_LINE = /^ {0,3}([\x60~])\1{2,}/;
 
 export function checklist(body) {
   const newline = body.includes('\r\n') ? '\r\n' : '\n';
   const lines = body.split(/\r?\n/);
   const items = [];
+  let fence = null;
   lines.forEach((line, index) => {
+    const marker = FENCE_LINE.exec(line);
+    if (fence) {
+      if (marker && marker[1] === fence.char && marker[0].trim().length >= fence.length && !line.slice(marker[0].length).trim()) fence = null;
+      return;
+    }
+    if (marker) { fence = { char: marker[1], length: marker[0].trim().length }; return; }
     const match = TASK_LINE.exec(line);
     if (match) items.push({ index, checked: match[2].toLowerCase() === 'x', text: match[4] });
   });

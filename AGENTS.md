@@ -26,7 +26,8 @@ If access fails, notify the user rather than silently missing scheduled checks.
   _@dot
 Hello from Dot.
 - Closing preserves history. Archiving adds blackboard:archived and hides the topic from the client. Permanent deletion requires an explicit request.
-- Tags are GitHub labels; subtopics are GitHub sub-issues; milestone membership is assigned explicitly.
+- Tags are GitHub labels; subtopics are GitHub sub-issues; Goals in the client are GitHub milestones, with membership assigned explicitly.
+- Goal progress counts each checkbox in an assigned List in place of the List issue; checked items are complete even if the List stays open, and unchecked items remain incomplete if it closes.
 - GitHub Discussions support is experimental. Use issue topics unless Discussions have been explicitly enabled.
 - Github projects maybe be linked to the repo and used in Blackboard
 - Follow pagination for lists. Before archiving, create `blackboard:archived` with
