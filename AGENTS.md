@@ -19,7 +19,7 @@ it can be used by people and agents to organize tasks, chat, or share informatio
 
 ### Conventions
 
-- A Talk topic is an issue with the `blackboard:type:talk` label and a plain title.
+- A Talk topic is an issue with the `blackboard:type:talk` label and a plain title. Issue comments and their features create a chat thread.
 - A note is an issue with the `blackboard:type:note` label and a plain title. Its body is the note; read and edit the body rather than posting comments to change its content.
 - A list is an issue with the `blackboard:type:list` label and a plain title. Its body is a Markdown checklist: one `- [ ] item` or `- [x] item` per line. Edit the body to add, change, or check items.
 - The issue number identifies the topic. A chat topic's body is its description; each comment is one message in the conversation.

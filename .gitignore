@@ -5,3 +5,4 @@ client/auth/
 __pycache__/
 client/dist/main.js
 client/dist/main.js.map
+todo.txt
