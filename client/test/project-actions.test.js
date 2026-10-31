@@ -111,11 +111,11 @@ test('invalid draft titles and column directions never make a request', async ()
   await assert.rejects(api.changeProjectColumn('PVT_1', { remove: true }), /Choose a status/);
 });
 
-test('card topic edits use the repo credential and retain the chat prefix', async () => {
+test('card topic edits use the repo credential and a plain title', async () => {
   const api = client(async (url, request) => {
     assert.equal(request.headers.Authorization, 'Bearer repo-token');
-    if (request.method === 'PATCH') assert.deepEqual(JSON.parse(request.body), { title: '💬 Renamed', body: 'Description' });
-    return Response.json({ number: 1, title: '💬 Renamed', state: 'open', body: 'Description' });
+    if (request.method === 'PATCH') assert.deepEqual(JSON.parse(request.body), { title: 'Renamed', body: 'Description' });
+    return Response.json({ number: 1, title: 'Renamed', labels: [{ name: 'topic:talk' }], state: 'open', body: 'Description' });
   });
   assert.equal((await api.updateChannelDetails(1, { name: 'Renamed', description: 'Description' })).name, 'Renamed');
 });

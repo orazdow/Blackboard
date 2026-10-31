@@ -27,7 +27,7 @@ test('discussion listings paginate with the repository credential and keep unpre
 
 test('closed and archived discussions are filtered independently; disabled discussions return an empty list', async () => {
   const api = client(() => success({ repository: { hasDiscussionsEnabled: true, discussions: connection([
-    entry(), entry({ id: 'CLOSED', closed: true }), entry({ id: 'ARCHIVE', labels: connection([{ name: 'blackboard:archived' }]) }),
+    entry(), entry({ id: 'CLOSED', closed: true }), entry({ id: 'ARCHIVE', labels: connection([{ name: 'Archived' }]) }),
   ]) } }));
   assert.equal((await api.listDiscussions()).length, 1);
   assert.equal((await api.listDiscussions({ includeClosed: true })).length, 2);
@@ -39,7 +39,7 @@ test('discussion labels paginate and archive metadata is omitted from tags', asy
   const api = client(async (url, request) => {
     const { query } = JSON.parse(request.body);
     if (query.includes('BlackboardDiscussionLabels')) return success({ node: { labels: connection([{ name: 'design', color: '112233' }]) } });
-    return success({ node: entry({ labels: connection([{ name: 'blackboard:archived' }], 'more') }) });
+    return success({ node: entry({ labels: connection([{ name: 'archived' }], 'more') }) });
   });
   const topic = await api.readDiscussion('discussion:DISC_1');
   assert.equal(topic.archived, true);

@@ -7,7 +7,7 @@ const client = (fetch) => createGitHubClient({ token: 'repo-token', projectToken
 const connection = (nodes, endCursor = null) => ({ nodes, pageInfo: { hasNextPage: Boolean(endCursor), endCursor } });
 const project = { id: 'PVT_1', number: 1, title: 'School', url: 'https://github.com/users/example/projects/1', closed: false, viewerCanUpdate: true };
 const status = { __typename: 'ProjectV2SingleSelectField', id: 'FIELD_1', name: 'Status', options: [{ id: 'todo', name: 'Todo' }, { id: 'done', name: 'Done' }] };
-const item = (id, extra = {}) => ({ id, isArchived: false, fieldValueByName: { optionId: 'todo' }, content: { __typename: 'Issue', id: 'ISSUE_1', number: 1, title: '💬 Topic', state: 'OPEN', url: 'https://github.com/example/chat/issues/1', repository: { nameWithOwner: 'example/chat' } }, ...extra });
+const item = (id, extra = {}) => ({ id, isArchived: false, fieldValueByName: { optionId: 'todo' }, content: { __typename: 'Issue', id: 'ISSUE_1', number: 1, title: 'Topic', state: 'OPEN', labels: { nodes: [{ name: 'topic:talk' }] }, url: 'https://github.com/example/chat/issues/1', repository: { nameWithOwner: 'example/chat' } }, ...extra });
 
 test('project listing paginates and uses only the Projects credential', async () => {
   const api = client(async (url, options) => {
@@ -60,7 +60,7 @@ test('adding a topic reads with the repo token and adds its node ID with the Pro
   const api = client(async (url, options) => {
     if (url.endsWith('/issues/1')) {
       assert.equal(options.headers.Authorization, 'Bearer repo-token');
-      return Response.json({ number: 1, node_id: 'ISSUE_1', title: '💬 Topic', state: 'open' });
+      return Response.json({ number: 1, node_id: 'ISSUE_1', title: 'Topic', labels: [{ name: 'topic:talk' }], state: 'open' });
     }
     assert.equal(options.headers.Authorization, 'Bearer project-token');
     assert.deepEqual(JSON.parse(options.body).variables, { project: 'PVT_1', content: 'ISSUE_1' });

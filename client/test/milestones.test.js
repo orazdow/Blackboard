@@ -5,7 +5,7 @@ import { createMilestoneTracker } from '../src/milestone-state.js';
 import { createTopicTracker } from '../src/topic-state.js';
 
 const raw = (number, extra = {}) => ({ number, title: `Target ${number}`, description: '', state: 'open', due_on: null, html_url: `https://github.com/example/chat/milestone/${number}`, open_issues: 3, closed_issues: 1, ...extra });
-const issue = (extra = {}) => ({ number: 1, title: '💬 Topic', state: 'open', labels: [], ...extra });
+const issue = (extra = {}) => ({ number: 1, title: 'Topic', state: 'open', labels: [{ name: 'topic:talk' }], ...extra });
 const client = (fetch) => createGitHubClient({ token: 'test', owner: 'example', repo: 'chat', fetch, minWriteInterval: 0 });
 
 test('milestones follow pagination, include closed when requested, and use repository completion counts', async () => {
@@ -79,7 +79,7 @@ test('invalid milestone input fails without requests; unrelated issues cannot be
   await assert.rejects(api.updateMilestone(1, { state: 'archived' }), /Invalid milestone state/);
   await assert.rejects(api.setChannelMilestone(1, -7), /Invalid milestone ID/);
   let calls = 0;
-  const unrelated = client(async () => { calls++; return Response.json(issue({ title: 'Unrelated' })); });
+  const unrelated = client(async () => { calls++; return Response.json(issue({ title: 'Unrelated', labels: [] })); });
   await assert.rejects(unrelated.setChannelMilestone(1, 7), /Only Blackboard topics/);
   assert.equal(calls, 1);
 });

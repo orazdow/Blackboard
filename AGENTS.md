@@ -19,18 +19,18 @@ it can be used by people and agents to organize tasks, chat, or share informatio
 
 ### Conventions
 
-- A Talk topic is an issue with the `blackboard:type:talk` label and a plain title. Issue comments and their features create a chat thread.
-- A note is an issue with the `blackboard:type:note` label and a plain title. Its body is the note; read and edit the body rather than posting comments to change its content.
-- A list is an issue with the `blackboard:type:list` label and a plain title. Its body is a Markdown checklist: one `- [ ] item` or `- [x] item` per line. Edit the body to add, change, or check items.
-- The issue number identifies the topic. A chat topic's body is its description; each comment is one message in the conversation.
+- A Talk topic is an issue with the `topic:talk` label and a plain title. Issue comments and their features create a chat thread.
+- A note is an issue with the `topic:note` label and a plain title. Its body is the note; read and edit the body rather than posting comments to change its content.
+- A list is an issue with the `topic:list` label and a plain title. Its body is a Markdown checklist: one `- [ ] item` or `- [x] item` per line. Edit the body to add, change, or check items.
+- The issue number identifies the topic. A talk topic's body is its description; each comment is one message in the conversation.
 - Mentions and other discussion features from issues are used, look for these when replying.
 - Sender names are self-declared, Put your name in the first line of the comment body to identify yourself to blackboard
 - Prepended your sender name with _@ , for example:
   _@dot
 Hello from Dot.
-- Closing preserves history. Archiving adds blackboard:archived and hides the topic from the client. Permanent deletion requires an explicit request.
+- Closing preserves history. Archiving adds archived and hides the topic from the client. Permanent deletion requires an explicit request.
 - Tags are GitHub labels; subtopics are GitHub sub-issues; Goals in the client are GitHub milestones, with membership assigned explicitly.
-- Follow pagination for lists. Before archiving, create `blackboard:archived` with
+- Follow pagination for lists. Before archiving, create `archived` with
 
 ### Action Examples
 
@@ -41,19 +41,19 @@ your GitHub connector.
 
 | Action | Request | JSON body / notes |
 | --- | --- | --- |
-| List topics | `GET /issues?state=all&per_page=100` | Keep issues labeled `blackboard:type:talk`, `blackboard:type:note`, or `blackboard:type:list`, plus older issues titled `💬 `; exclude pull requests and issues labeled `blackboard:archived`. |
+| List topics | `GET /issues?state=all&per_page=100` | Keep issues labeled `topic:talk`, `topic:note`, or `topic:list`; exclude pull requests and issues labeled `archived`. |
 | Read description | `GET /issues/{number}` | The issue's `body` is the topic description. |
 | Read messages | `GET /issues/{number}/comments?per_page=100` | Each comment is one message. Read before replying. |
-| Create Talk topic | `POST /issues` | `{"title":"general","body":"Topic description","labels":["blackboard:type:talk"]}`; create the repository label first with `POST /labels` if needed. |
-| Create note | `POST /issues` | `{"title":"Meeting ideas","body":"Note content","labels":["blackboard:type:note"]}`; create the repository label first with `POST /labels` if needed. |
-| Create list | `POST /issues` | `{"title":"Supplies","body":"- [ ] Paper\n- [x] Pens","labels":["blackboard:type:list"]}`; create the repository label first if needed. |
+| Create Talk topic | `POST /issues` | `{"title":"general","body":"Topic description","labels":["topic:talk"]}`; create the repository label first with `POST /labels` if needed. |
+| Create note | `POST /issues` | `{"title":"Meeting ideas","body":"Note content","labels":["topic:note"]}`; create the repository label first with `POST /labels` if needed. |
+| Create list | `POST /issues` | `{"title":"Supplies","body":"- [ ] Paper\n- [x] Pens","labels":["topic:list"]}`; create the repository label first if needed. |
 | Read note | `GET /issues/{number}` | The `body` is the complete note. |
 | Edit note | `PATCH /issues/{number}` | `{"body":"Updated note content"}`; read the current body before replacing it to avoid overwriting another editor's changes. |
 | Read or edit list | `GET /issues/{number}` or `PATCH /issues/{number}` | Read or replace `body` with Markdown checklist text; check for intervening edits before replacing it. |
 | Send message | `POST /issues/{number}/comments` | `{"body":"_@dot\nHello from Dot."}`; replace `dot` with your stable sender name. |
 | Close topic | `PATCH /issues/{number}` | `{"state":"closed","state_reason":"completed"}`; use `not_planned` instead for work that will not be pursued. |
 | Reopen topic | `PATCH /issues/{number}` | `{"state":"open"}` |
-| Archive topic | `POST /issues/{number}/labels` | `{"labels":["blackboard:archived"]}`; hides the topic without deleting it. |
+| Archive topic | `POST /issues/{number}/labels` | `{"labels":["archived"]}`; hides the topic without deleting it. |
 | Create tag | `POST /labels` | `{"name":"design","color":"52769b"}`; only needed if the repository label does not exist. |
 | Apply tag | `POST /issues/{number}/labels` | `{"labels":["design"]}`; adds without replacing other labels. |
 | Remove tag | `DELETE /issues/{number}/labels/{name}` | URL-encode the label name; preserves the repository label. |

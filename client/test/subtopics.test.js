@@ -4,8 +4,8 @@ import { createGitHubClient } from '../src/api.js';
 import { topicRows, createTopicTracker } from '../src/topic-state.js';
 
 const issue = (number, extra = {}) => ({
-  id: 1000 + number, number, node_id: `I_${number}`, title: `💬 topic-${number}`,
-  state: 'open', body: '', labels: [], repository_url: 'https://api.github.com/repos/example/chat',
+  id: 1000 + number, number, node_id: `I_${number}`, title: `topic-${number}`,
+  state: 'open', body: '', labels: [{ name: 'topic:talk' }], repository_url: 'https://api.github.com/repos/example/chat',
   html_url: `https://github.com/example/chat/issues/${number}`, sub_issues_summary: { total: 0 }, ...extra,
 });
 const client = (fetch) => createGitHubClient({ token: 'test', owner: 'example', repo: 'chat', fetch, minWriteInterval: 0 });
@@ -43,8 +43,8 @@ test('subtopic creation attaches the numeric database ID, not the issue number',
   });
   const result = await api.createChannel({ name: 'Child', parentId: 1 });
   assert.equal(result.parentId, 1);
-  assert.equal(calls[2].url, 'https://api.github.com/repos/example/chat/issues/1/sub_issues');
-  assert.deepEqual(JSON.parse(calls[2].body), { sub_issue_id: 1003 });
+  assert.equal(calls[3].url, 'https://api.github.com/repos/example/chat/issues/1/sub_issues');
+  assert.deepEqual(JSON.parse(calls[3].body), { sub_issue_id: 1003 });
 });
 
 test('failed attachment exposes the already-created topic without creating it again', async () => {
@@ -87,7 +87,7 @@ test('archiving cascades labels without closing any topic', async () => {
   const archived = [];
   const normal = treeFetch([]);
   const api = client(async (url, options) => {
-    if (url.includes('/labels/')) return Response.json({ name: 'blackboard:archived' });
+    if (url.includes('/labels/')) return Response.json({ name: 'archived' });
     if (options.method === 'POST' && url.endsWith('/labels')) {
       archived.push(Number(new URL(url).pathname.split('/').at(-2)));
       return Response.json([]);

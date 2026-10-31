@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { createGitHubClient, GitHubError } from '../src/api.js';
 
 const issue = (number, extra = {}) => ({
-  number, node_id: `I_${number}`, title: `💬 channel-${number}`, body: 'Topic description',
-  state: 'open', html_url: `https://github.com/example/chat/issues/${number}`, ...extra,
+  number, node_id: `I_${number}`, title: `channel-${number}`, body: 'Topic description',
+  state: 'open', labels: [{ name: 'topic:talk' }], html_url: `https://github.com/example/chat/issues/${number}`, ...extra,
 });
 const comment = (id) => ({ id, user: { login: 'agent' }, body: 'Hello', created_at: '2026-10-20T19:00:00Z', html_url: 'https://github.com/example/chat' });
 const client = (fetch, extra = {}) => createGitHubClient({ token: 'test-token', owner: 'example', repo: 'chat', fetch, minWriteInterval: 0, ...extra });
@@ -99,7 +99,8 @@ test('lists all pages and excludes unrelated issues and pull requests', async ()
     assert.equal(options.headers.Authorization, 'Bearer test-token');
     return Response.json(calls.length === 1
       ? Array.from({ length: 100 }, (_, i) => issue(i + 1))
-      : [issue(101), issue(102, { title: 'Other issue' }), issue(103, { pull_request: {} })], {
+      : [issue(101), issue(102, { title: 'Other issue', labels: [] }), issue(103, { pull_request: {} }),
+        issue(104, { labels: [{ name: 'blackboard:type:talk' }] }), issue(105, { title: '💬 Legacy', labels: [] })], {
         headers: calls.length === 1 ? { link: '<https://api.github.com/repos/example/chat/issues?state=open&per_page=100&page=2>; rel="next"' } : {},
       });
   });
@@ -110,23 +111,24 @@ test('lists all pages and excludes unrelated issues and pull requests', async ()
   assert.match(calls[1], /page=2/);
 });
 
-test('creates prefixed channels, posts comments, and closes without deleting', async () => {
+test('creates labeled topics, posts comments, and closes without deleting', async () => {
   const calls = [];
   const api = client(async (url, options) => {
-    calls.push({ url, ...options, body: JSON.parse(options.body) });
+    calls.push({ url, ...options, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/labels/topic%3Atalk')) return Response.json({ name: 'topic:talk' });
     return Response.json(url.endsWith('/comments') ? comment(7) : issue(3));
   });
   await api.createChannel({ name: ' general ', topic: 'Welcome' });
   const sent = await api.sendMessage(3, 'Hello');
   await api.closeChannel(3);
-  assert.deepEqual(calls[0].body, { title: '💬 general', body: 'Welcome' });
-  assert.equal(calls[1].method, 'POST');
-  assert.deepEqual(calls[1].body, { body: 'Hello' });
+  assert.deepEqual(calls[1].body, { title: 'general', body: 'Welcome', labels: ['topic:talk'] });
+  assert.equal(calls[2].method, 'POST');
+  assert.deepEqual(calls[2].body, { body: 'Hello' });
   assert.equal(sent.author, 'agent');
   assert.ok(sent.time instanceof Date);
-  assert.equal(calls[2].method, 'PATCH');
-  assert.equal(calls[2].body.state, 'closed');
-  assert.equal(calls[2].body.state_reason, 'not_planned');
+  assert.equal(calls[3].method, 'PATCH');
+  assert.equal(calls[3].body.state, 'closed');
+  assert.equal(calls[3].body.state_reason, 'not_planned');
 });
 
 test('includes archived topics on request and reopens an issue', async () => {
@@ -178,8 +180,8 @@ test('polling reflects added and removed reactions on an existing comment', asyn
 
 test('archived topics are hidden by default independently of open/closed state', async () => {
   const api = client(async () => Response.json([
-    issue(1), issue(2, { labels: [{ name: 'blackboard:archived' }] }),
-    issue(3, { state: 'closed', labels: ['blackboard:archived'] }),
+    issue(1), issue(2, { labels: [{ name: 'topic:talk' }, { name: 'Archived' }] }),
+    issue(3, { state: 'closed', labels: ['topic:talk', 'archived'] }),
   ]));
   assert.deepEqual((await api.listChannels({ includeClosed: true })).map((item) => item.id), [1]);
   const all = await api.listChannels({ includeClosed: true, includeArchived: true });
@@ -192,13 +194,13 @@ test('archiving adds a label without replacing existing labels or closing the is
   const calls = [];
   const api = client(async (url, options) => {
     calls.push({ url, ...options });
-    return Response.json(options.method === 'GET' ? { name: 'blackboard:archived' } : [{ name: 'blackboard:archived' }]);
+    return Response.json(options.method === 'GET' ? { name: 'archived' } : [{ name: 'archived' }]);
   });
   assert.deepEqual(await api.archiveChannel(3), { id: 3, archived: true });
   assert.equal(calls.length, 2);
   assert.match(calls[1].url, /\/issues\/3\/labels$/);
   assert.equal(calls[1].method, 'POST');
-  assert.deepEqual(JSON.parse(calls[1].body), { labels: ['blackboard:archived'] });
+  assert.deepEqual(JSON.parse(calls[1].body), { labels: ['archived'] });
 });
 
 test('archiving creates the repository label if missing', async () => {
@@ -206,12 +208,12 @@ test('archiving creates the repository label if missing', async () => {
   const api = client(async (url, options) => {
     calls.push({ url, ...options });
     if (calls.length === 1) return Response.json({ message: 'Not Found' }, { status: 404 });
-    return Response.json({ name: 'blackboard:archived' });
+    return Response.json({ name: 'archived' });
   });
   await api.archiveChannel(3);
   assert.equal(calls.length, 3);
   assert.match(calls[1].url, /\/labels$/);
-  assert.equal(JSON.parse(calls[1].body).name, 'blackboard:archived');
+  assert.equal(JSON.parse(calls[1].body).name, 'archived');
   assert.match(calls[2].url, /\/issues\/3\/labels$/);
 });
 
@@ -240,7 +242,7 @@ test('GraphQL deletion errors do not report success', async () => {
 
 test('deletion refuses non-topics and never retries an uncertain mutation', async () => {
   let calls = 0;
-  const unrelated = client(async () => { calls++; return Response.json(issue(3, { title: 'Other issue' })); });
+  const unrelated = client(async () => { calls++; return Response.json(issue(3, { title: 'Other issue', labels: [] })); });
   await assert.rejects(unrelated.deleteChannel(3), /Only Blackboard/);
   assert.equal(calls, 1);
   calls = 0;

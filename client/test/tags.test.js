@@ -4,7 +4,11 @@ import { createGitHubClient } from '../src/api.js';
 import { createTopicTracker } from '../src/topic-state.js';
 
 const label = (name, extra = {}) => ({ name, color: '52769b', description: '', ...extra });
-const issue = (extra = {}) => ({ number: 1, title: '💬 Topic', state: 'open', labels: [], sub_issues_summary: { total: 0 }, ...extra });
+const issue = ({ labels = [], ...extra } = {}) => ({
+  number: 1, title: 'Topic', state: 'open',
+  labels: labels === null ? [] : [label('topic:talk'), ...labels],
+  sub_issues_summary: { total: 0 }, ...extra,
+});
 const client = (fetch) => createGitHubClient({ token: 'test', owner: 'example', repo: 'chat', fetch, minWriteInterval: 0 });
 
 test('suggestions paginate through usage, deduplicate names, and omit internal and archived labels', async () => {
@@ -12,7 +16,7 @@ test('suggestions paginate through usage, deduplicate names, and omit internal a
   const api = client(async (url) => {
     assert.match(url, /\/issues\?state=all/);
     return Response.json(++calls === 1
-      ? [issue({ labels: [label('one'), label('blackboard:archived')] })]
+      ? [issue({ labels: [label('one'), label('archived')] })]
       : [issue({ labels: [label('two'), label('one'), label('old', { archived_at: '2026-01-01' })] })], {
         headers: calls === 1 ? { link: '<https://api.github.com/repos/example/chat/issues?state=all&per_page=100&page=2>; rel="next"' } : {},
       });
@@ -94,13 +98,13 @@ test('removing a tag encodes its name and never deletes the repository label', a
 
 test('invalid and internal tags never issue a request; non-topics cannot be tagged', async () => {
   const api = client(async () => assert.fail('Unexpected request'));
-  for (const name of ['', ' ', 'a'.repeat(51), 'two\nlines', 'BLACKBOARD:ARCHIVED']) {
+  for (const name of ['', ' ', 'a'.repeat(51), 'two\nlines', 'BLACKBOARD:ARCHIVED', 'TOPIC:TALK']) {
     await assert.rejects(api.addChannelTag(1, name));
     await assert.rejects(api.removeChannelTag(1, name));
   }
   const unrelated = client(async (url, options) => {
     assert.equal(options.method, 'GET');
-    return Response.json(issue({ title: 'Unrelated' }));
+    return Response.json(issue({ title: 'Unrelated', labels: null }));
   });
   await assert.rejects(unrelated.addChannelTag(1, 'tag'), /Only Blackboard/);
   await assert.rejects(unrelated.removeChannelTag(1, 'tag'), /Only Blackboard/);
@@ -122,7 +126,7 @@ test('an uncertain label creation is distinguished from uncertain topic applicat
 });
 
 test('topic labels become tags with safe colors and exclude the archive marker', async () => {
-  const api = client(async () => Response.json([issue({ labels: [label('work', { color: 'ff0000' }), label('bad color', { color: 'red;display:none' }), label('blackboard:archived')] })]));
+  const api = client(async () => Response.json([issue({ labels: [label('work', { color: 'ff0000' }), label('bad color', { color: 'red;display:none' }), label('archived')] })]));
   const topics = await api.listChannels({ includeArchived: true });
   assert.equal(topics[0].archived, true);
   assert.deepEqual(topics[0].tags.map(({ name, color }) => [name, color]), [['work', 'ff0000'], ['bad color', '52769b']]);

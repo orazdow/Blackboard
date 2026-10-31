@@ -1,8 +1,8 @@
-export const CHANNEL_PREFIX = '💬 ';
-export const ARCHIVED_LABEL = 'blackboard:archived';
-export const TALK_LABEL = 'blackboard:type:talk';
-export const NOTE_LABEL = 'blackboard:type:note';
-export const LIST_LABEL = 'blackboard:type:list';
+export const ARCHIVED_LABEL = 'archived';
+export const TALK_LABEL = 'topic:talk';
+export const NOTE_LABEL = 'topic:note';
+export const LIST_LABEL = 'topic:list';
+const TOPIC_LABELS = [TALK_LABEL, NOTE_LABEL, LIST_LABEL];
 const REACTION_TYPES = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
 const REACTION_ENUMS = ['THUMBS_UP', 'THUMBS_DOWN', 'LAUGH', 'CONFUSED', 'HEART', 'HOORAY', 'ROCKET', 'EYES'];
 export const isDiscussionId = (id) => typeof id === 'string' && /^discussion:[A-Za-z0-9_=-]{1,256}$/.test(id);
@@ -215,10 +215,10 @@ export function createGitHubClient({
   async function discussion(entry) {
     if (!entry?.id) throw new GitHubError('Discussion is unavailable.');
     const labels = await discussionLabels(entry);
-    return { id: `discussion:${entry.id}`, number: entry.number, kind: 'discussion', name: entry.title.startsWith(CHANNEL_PREFIX) ? entry.title.slice(CHANNEL_PREFIX.length) : entry.title,
+    return { id: `discussion:${entry.id}`, number: entry.number, kind: 'discussion', name: entry.title,
       description: entry.body || '', state: entry.closed ? 'closed' : 'open', url: entry.url,
       parentId: null, milestoneId: null, tags: topicTags(labels), category: entry.category,
-      archived: labels.some((label) => label.name === ARCHIVED_LABEL) };
+      archived: labels.some((label) => label.name.toLowerCase() === ARCHIVED_LABEL) };
   }
   async function ensureLabel(name) {
     const path = `/labels/${encodeURIComponent(name)}`;
@@ -272,23 +272,23 @@ export function createGitHubClient({
     color: typeof label !== 'string' && /^[0-9a-f]{6}$/i.test(label.color) ? label.color : '52769b',
     description: typeof label === 'string' ? '' : label.description || '',
   });
-  const topicTags = (labels) => labels.map(tag).filter((item) => ![ARCHIVED_LABEL, TALK_LABEL, NOTE_LABEL, LIST_LABEL].includes(item.name.toLowerCase()));
+  const topicTags = (labels) => labels.map(tag).filter((item) => item.name.toLowerCase() !== ARCHIVED_LABEL && !item.name.toLowerCase().startsWith('topic:'));
   const tagName = (name) => {
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 50 || /[\x00-\x1f\x7f]/.test(name)) throw new GitHubError('Tag names must contain 1–50 characters.');
     const trimmed = name.trim();
-    if (trimmed.toLowerCase() === ARCHIVED_LABEL.toLowerCase() || trimmed.toLowerCase().startsWith('blackboard:type:')) throw new GitHubError('That label is reserved for Blackboard.');
+    if (trimmed.toLowerCase() === ARCHIVED_LABEL || trimmed.toLowerCase().startsWith('topic:')) throw new GitHubError('That label is reserved for Blackboard.');
     return trimmed;
   };
   const hasLabel = (issue, name) => (issue.labels || []).some((label) => (typeof label === 'string' ? label : label.name).toLowerCase() === name);
   const isNote = (issue) => hasLabel(issue, NOTE_LABEL);
   const isList = (issue) => hasLabel(issue, LIST_LABEL);
   const channel = (issue) => ({
-    id: issue.number, kind: isList(issue) ? 'list' : isNote(issue) ? 'note' : 'talk', name: issue.title.startsWith(CHANNEL_PREFIX) ? issue.title.slice(CHANNEL_PREFIX.length) : issue.title,
+    id: issue.number, kind: isList(issue) ? 'list' : isNote(issue) ? 'note' : 'talk', name: issue.title,
     description: issue.body || '', state: issue.state, url: issue.html_url,
     parentId: null,
     milestoneId: issue.milestone?.number ?? null,
     tags: topicTags(issue.labels || []),
-    archived: (issue.labels || []).some((label) => (typeof label === 'string' ? label : label.name) === ARCHIVED_LABEL),
+    archived: hasLabel(issue, ARCHIVED_LABEL),
   });
   const message = (comment) => ({
     id: comment.id, author: comment.user.login, ...decodeMessage(comment.body || ''),
@@ -304,7 +304,7 @@ export function createGitHubClient({
     return `/issues/comments/${commentId}/reactions`;
   };
   const reaction = (entry) => ({ id: entry.id, type: entry.content, author: entry.user.login });
-  const isTopic = (issue) => !issue.pull_request && (issue.title.startsWith(CHANNEL_PREFIX) || [TALK_LABEL, NOTE_LABEL, LIST_LABEL].some((name) => hasLabel(issue, name)));
+  const isTopic = (issue) => !issue.pull_request && TOPIC_LABELS.some((name) => hasLabel(issue, name));
   async function readDocument(id, kind) {
     const issue = await request(issuePath(id), { fresh: true });
     if (issue.pull_request || channel(issue).kind !== kind) throw new GitHubError(`This issue is not a Blackboard ${kind}.`);
@@ -578,9 +578,9 @@ export function createGitHubClient({
         for (const item of connection.nodes.filter((item) => item && !item.isArchived)) {
           const content = item.content;
           const localTopic = content?.__typename === 'Issue' && content.repository?.nameWithOwner.toLowerCase() === `${owner}/${repo}`.toLowerCase()
-            && (content.title.startsWith(CHANNEL_PREFIX) || (content.labels?.nodes || []).some((label) => [TALK_LABEL, NOTE_LABEL, LIST_LABEL].includes(label.name.toLowerCase())));
+            && (content.labels?.nodes || []).some((label) => TOPIC_LABELS.includes(label.name.toLowerCase()));
           items.push({
-            id: item.id, contentId: content?.id, title: localTopic && content.title.startsWith(CHANNEL_PREFIX) ? content.title.slice(CHANNEL_PREFIX.length) : content?.title || 'Unavailable item',
+            id: item.id, contentId: content?.id, title: content?.title || 'Unavailable item',
             type: content?.__typename || 'Unavailable', url: content?.url || null,
             body: content?.body || '',
             number: content?.number ?? null, repository: content?.repository?.nameWithOwner || null,
@@ -662,7 +662,7 @@ export function createGitHubClient({
       if (typeof name !== 'string' || !name.trim()) throw new GitHubError('A topic name is required.');
       const current = await request(path);
       if (!isTopic(current)) throw new GitHubError('Only Blackboard topics can be edited.');
-      return channel(await request(path, { method: 'PATCH', body: { title: [TALK_LABEL, NOTE_LABEL, LIST_LABEL].some((label) => hasLabel(current, label)) ? name.trim() : CHANNEL_PREFIX + name.trim(), body: description } }));
+      return channel(await request(path, { method: 'PATCH', body: { title: name.trim(), body: description } }));
     },
     async changeProjectColumn(projectId, { id = null, name, color = 'GRAY', description = '', direction = null, remove = false }) {
       nodeId(projectId);
