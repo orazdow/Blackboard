@@ -431,7 +431,8 @@ textarea::placeholder {
 .list-source-editor { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: var(--space-3); }
 .list-source-editor textarea { flex: 1; min-height: 180px; width: 100%; resize: vertical; padding: var(--space-4); line-height: 1.55; font-size: 0.9rem; }
 .list-source-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-.list-source-actions button:last-child { background: transparent; border: 1px solid var(--color-border); }
+.list-source-actions button:last-child { border: 1px solid #3b5772; background: #29415b; color: #d8e8f5; }
+.list-source-actions button:last-child:hover:not(:disabled) { background: #365573; }
 
 /* Topic status confirmation */
 .topic-status-dialog { width: min(420px, calc(100% - var(--space-8))); max-height: calc(100dvh - var(--space-8)); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: 12px; color: var(--color-text); background: #132332; box-shadow: 0 24px 80px #0008; }
