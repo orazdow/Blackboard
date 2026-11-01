@@ -131,6 +131,27 @@ test('creates labeled topics, posts comments, and closes without deleting', asyn
   assert.equal(calls[3].body.state_reason, 'not_planned');
 });
 
+test('talk descriptions use the issue body and reject a stale edit', async () => {
+  let body = 'First description';
+  let writes = 0;
+  const api = client(async (url, options) => {
+    assert.match(url, /\/issues\/6$/);
+    if (options.method === 'PATCH') {
+      writes++;
+      body = JSON.parse(options.body).body;
+    }
+    return Response.json(issue(6, { body }));
+  });
+  assert.equal((await api.readTalk(6)).description, 'First description');
+  assert.equal((await api.updateTalkDescription(6, 'Updated description', 'First description')).description, 'Updated description');
+  body = 'Changed elsewhere';
+  await assert.rejects(api.updateTalkDescription(6, 'My stale edit', 'Updated description'), /changed on GitHub/);
+  assert.equal(writes, 1);
+  assert.equal(body, 'Changed elsewhere');
+  assert.equal((await api.updateTalkDescription(6, '', 'Changed elsewhere')).description, '');
+  assert.equal(writes, 2);
+});
+
 test('includes archived topics on request and reopens an issue', async () => {
   const calls = [];
   const api = client(async (url, options) => {

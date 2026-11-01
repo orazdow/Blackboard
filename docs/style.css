@@ -355,10 +355,22 @@ textarea::placeholder {
 /* Conversation */
 .chat-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .chat-header { position: relative; flex: 0 0 var(--header-height); padding: var(--space-6) var(--space-8); border-bottom: 1px solid var(--color-border); }
-.chat-header h2 { margin: 0 0 var(--space-1); font-size: 1.1rem; }
+.chat-header h2 { margin: 0 0 var(--space-1); font-size: 1.1rem; text-decoration: underline; text-underline-offset: 0.18em; }
 .chat-header h2 { padding-right: 6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-header p { margin: 0; padding-right: 6rem; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-header-actions { position: absolute; right: var(--space-8); top: var(--space-6); display: flex; align-items: center; gap: var(--space-3); }
+.talk-description { flex: 0 1 auto; min-height: 0; padding: var(--space-4) var(--space-8) 0; }
+.talk-description-display { min-height: 1.5rem; }
+.talk-description-display .talk-description-text { max-height: 12rem; margin: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.talk-description-edit { display: block; padding: 0; background: transparent; color: var(--color-muted); font-size: 0.8rem; }
+.talk-description-display.has-description .talk-description-edit { margin-top: var(--space-2); }
+.talk-description-edit:hover:not(:disabled), .talk-description-edit:focus-visible { color: var(--color-text); background: transparent; }
+.talk-description-form { display: flex; flex-direction: column; width: 100%; gap: var(--space-2); }
+.talk-description-form textarea { width: 100%; min-height: 8rem; max-height: 16rem; resize: vertical; }
+.talk-description-actions { display: flex; gap: var(--space-2); }
+.talk-description-actions button { padding: var(--space-1) var(--space-3); font-size: 0.8rem; }
+.talk-description-actions .talk-description-cancel, .talk-description-actions .talk-description-delete { border: 1px solid var(--color-border); background: transparent; color: var(--color-text); }
+.talk-description-error { margin: 0 0 var(--space-2); color: #f1c6a7; font-size: 0.8rem; }
 .preview-badge { font-size: 0.7rem; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: 20px; color: var(--color-muted); }
 .topic-status { display: flex; align-items: center; gap: var(--space-2); border: 1px solid #35594f; border-radius: 20px; padding: var(--space-1) var(--space-3); background: #15352f; color: #9cddc2; font-size: 0.75rem; font-weight: 600; }
 .topic-status:hover:not(:disabled) { background: #20483e; }
@@ -410,7 +422,7 @@ textarea::placeholder {
 .list-item-edit { display: flex; flex: 1; min-width: 0; gap: var(--space-2); }
 .list-item-edit input, .list-add input { flex: 1; min-width: 0; }
 .list-other-content { color: var(--color-muted); font-size: 0.75rem; }
-.list-add { display: flex; gap: var(--space-2); }
+.list-add { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
 .list-source-editor { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: var(--space-3); }
 .list-source-editor textarea { flex: 1; min-height: 180px; width: 100%; resize: vertical; padding: var(--space-4); line-height: 1.55; font-size: 0.9rem; }
 .list-source-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
@@ -481,6 +493,7 @@ textarea::placeholder {
   .note-view { padding: var(--space-4); }
   .list-view { padding: var(--space-4); }
   .chat-header h2 { padding-right: 6rem; }
+  .talk-description { padding: var(--space-3) var(--space-4) 0; }
   .chat-header-actions { right: var(--space-4); top: var(--space-4); }
   .chat-topic-controls { padding: var(--space-3) var(--space-4) 0; }
   .topic-tags { padding: var(--space-2) var(--space-4) 0; }

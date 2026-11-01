@@ -38,7 +38,7 @@ export default function NoteView(props) {
 
   async function save(event) {
     event.preventDefault();
-    if (busy() || uncertain()) return;
+    if (busy() || uncertain() || draft() === base()) return;
     setBusy(true); props.onBusyChange(true); setError('');
     try {
       const updated = await props.api.updateNote(props.topic.id, draft(), base());
@@ -76,7 +76,7 @@ export default function NoteView(props) {
         <textarea aria-label="Note content" value={draft()} disabled={busy()}
           onInput={(event) => { const text = event.currentTarget.value; setDraft(text); rememberDraft(base(), text); }} />
         <div class="note-editor-actions">
-          <Show when={uncertain()} fallback={<button type="submit" disabled={busy() || draft() === base()}>{busy() ? 'Saving…' : 'Save'}</button>}>
+          <Show when={uncertain()} fallback={<button type="submit" disabled={busy()}>{busy() ? 'Saving…' : 'Save'}</button>}>
             <button type="button" disabled={busy()} onClick={checkSave}>Check GitHub</button>
           </Show>
           <button type="button" disabled={busy()} onClick={() => { clearDraft(); setEditing(false); setUncertain(false); setError(''); }}>Cancel</button>

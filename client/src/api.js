@@ -859,6 +859,8 @@ export function createGitHubClient({
     async readNote(id) {
       return readDocument(id, 'note');
     },
+    async readTalk(id) { return readDocument(id, 'talk'); },
+    async updateTalkDescription(id, body, expectedBody) { return updateDocument(id, 'talk', body, expectedBody); },
     async updateNote(id, body, expectedBody) {
       return updateDocument(id, 'note', body, expectedBody);
     },

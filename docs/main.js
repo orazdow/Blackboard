@@ -2016,6 +2016,12 @@ function createGitHubClient({
     async readNote(id) {
       return readDocument(id, 'note');
     },
+    async readTalk(id) {
+      return readDocument(id, 'talk');
+    },
+    async updateTalkDescription(id, body, expectedBody) {
+      return updateDocument(id, 'talk', body, expectedBody);
+    },
     async updateNote(id, body, expectedBody) {
       return updateDocument(id, 'note', body, expectedBody);
     },
@@ -2462,20 +2468,20 @@ function sameProjectColumns(a, b) {
   return signature(a) === signature(b);
 }
 
-var _tmpl$$4 = /*#__PURE__*/template(`<details class=project-menu><summary></summary><div class=project-menu-options>`),
-  _tmpl$2$4 = /*#__PURE__*/template(`<svg width=16 height=16 viewBox="0 0 24 24"fill=currentColor aria-hidden=true><circle cx=5 cy=12 r=1.5></circle><circle cx=12 cy=12 r=1.5></circle><circle cx=19 cy=12 r=1.5>`),
-  _tmpl$3$4 = /*#__PURE__*/template(`<button type=button class=project-card-title>`),
-  _tmpl$4$4 = /*#__PURE__*/template(`<a class=project-card-title target=_blank rel="noopener noreferrer"> ↗`),
-  _tmpl$5$4 = /*#__PURE__*/template(`<span class=project-card-title>`),
-  _tmpl$6$4 = /*#__PURE__*/template(`<select><option value>No status`),
-  _tmpl$7$4 = /*#__PURE__*/template(`<option>`),
-  _tmpl$8$4 = /*#__PURE__*/template(`<button type=button>Edit details`),
+var _tmpl$$5 = /*#__PURE__*/template(`<details class=project-menu><summary></summary><div class=project-menu-options>`),
+  _tmpl$2$5 = /*#__PURE__*/template(`<svg width=16 height=16 viewBox="0 0 24 24"fill=currentColor aria-hidden=true><circle cx=5 cy=12 r=1.5></circle><circle cx=12 cy=12 r=1.5></circle><circle cx=19 cy=12 r=1.5>`),
+  _tmpl$3$5 = /*#__PURE__*/template(`<button type=button class=project-card-title>`),
+  _tmpl$4$5 = /*#__PURE__*/template(`<a class=project-card-title target=_blank rel="noopener noreferrer"> ↗`),
+  _tmpl$5$5 = /*#__PURE__*/template(`<span class=project-card-title>`),
+  _tmpl$6$5 = /*#__PURE__*/template(`<select><option value>No status`),
+  _tmpl$7$5 = /*#__PURE__*/template(`<option>`),
+  _tmpl$8$5 = /*#__PURE__*/template(`<button type=button>Edit details`),
   _tmpl$9$3 = /*#__PURE__*/template(`<button type=button>`),
   _tmpl$0$3 = /*#__PURE__*/template(`<a target=_blank rel="noopener noreferrer">Open in GitHub ↗`),
   _tmpl$1$3 = /*#__PURE__*/template(`<a class=preview-badge target=_blank rel="noopener noreferrer">GitHub ↗`),
   _tmpl$10$3 = /*#__PURE__*/template(`<div class=api-error role=alert> <button type=button aria-label="Dismiss project error">×`),
   _tmpl$11$2 = /*#__PURE__*/template(`<button type=button>+ Table`),
-  _tmpl$12$2 = /*#__PURE__*/template(`<button type=button>+ Board`),
+  _tmpl$12$1 = /*#__PURE__*/template(`<button type=button>+ Board`),
   _tmpl$13$1 = /*#__PURE__*/template(`<nav class=project-views aria-label="Project views">`),
   _tmpl$14$1 = /*#__PURE__*/template(`<span class=project-view-label>Board`),
   _tmpl$15$1 = /*#__PURE__*/template(`<select aria-label="Add topic to project"value><option value>`),
@@ -3050,7 +3056,7 @@ function ProjectBoard(props) {
   }
   function Menu(menuProps) {
     return (() => {
-      var _el$ = _tmpl$$4(),
+      var _el$ = _tmpl$$5(),
         _el$2 = _el$.firstChild,
         _el$3 = _el$2.nextSibling;
       _el$.addEventListener("toggle", event => {
@@ -3070,7 +3076,7 @@ function ProjectBoard(props) {
           return menuProps.label === 'New view';
         },
         get fallback() {
-          return _tmpl$2$4();
+          return _tmpl$2$5();
         },
         children: "+ New view"
       }));
@@ -3096,24 +3102,24 @@ function ProjectBoard(props) {
       },
       get fallback() {
         return memo(() => !!item().url)() ? (() => {
-          var _el$6 = _tmpl$4$4(),
+          var _el$6 = _tmpl$4$5(),
             _el$7 = _el$6.firstChild;
           insert(_el$6, () => item().title, _el$7);
           createRenderEffect(() => setAttribute(_el$6, "href", item().url));
           return _el$6;
         })() : memo(() => !!(item().type === 'DraftIssue' && !item().temporary && board().canUpdate))() ? (() => {
-          var _el$8 = _tmpl$3$4();
+          var _el$8 = _tmpl$3$5();
           _el$8.$$click = () => openEditor('item', item());
           insert(_el$8, () => item().title);
           return _el$8;
         })() : (() => {
-          var _el$9 = _tmpl$5$4();
+          var _el$9 = _tmpl$5$5();
           insert(_el$9, () => item().title);
           return _el$9;
         })();
       },
       get children() {
-        var _el$5 = _tmpl$3$4();
+        var _el$5 = _tmpl$3$5();
         _el$5.$$click = () => props.onOpenTopic(item().channelId);
         insert(_el$5, () => item().title);
         return _el$5;
@@ -3129,7 +3135,7 @@ function ProjectBoard(props) {
         return board().statusField?.options.find(option => option.id === itemProps.item.statusId)?.name || 'No status';
       },
       get children() {
-        var _el$0 = _tmpl$6$4();
+        var _el$0 = _tmpl$6$5();
           _el$0.firstChild;
         _el$0.addEventListener("change", event => {
           const target = event.currentTarget.value || null;
@@ -3141,7 +3147,7 @@ function ProjectBoard(props) {
             return board().statusField.options;
           },
           children: option => (() => {
-            var _el$10 = _tmpl$7$4();
+            var _el$10 = _tmpl$7$5();
             insert(_el$10, () => option.name);
             createRenderEffect(() => _el$10.value = option.id);
             return _el$10;
@@ -3185,7 +3191,7 @@ function ProjectBoard(props) {
                 })() : null;
               },
               get children() {
-                var _el$11 = _tmpl$8$4();
+                var _el$11 = _tmpl$8$5();
                 _el$11.$$click = () => openEditor('item', itemProps.item);
                 createRenderEffect(() => _el$11.disabled = busy()[itemProps.item.id] || Boolean(itemProps.item.syncState) || fieldBusy());
                 return _el$11;
@@ -3340,7 +3346,7 @@ function ProjectBoard(props) {
                     });
                     return _el$24;
                   })(), (() => {
-                    var _el$25 = _tmpl$12$2();
+                    var _el$25 = _tmpl$12$1();
                     _el$25.$$click = () => openEditor('view', {
                       layout: 'BOARD_LAYOUT'
                     });
@@ -3594,7 +3600,7 @@ function ProjectBoard(props) {
                               },
                               get children() {
                                 return [(() => {
-                                  var _el$101 = _tmpl$8$4();
+                                  var _el$101 = _tmpl$8$5();
                                   _el$101.$$click = () => openEditor('column', column);
                                   createRenderEffect(() => _el$101.disabled = !canChangeColumns());
                                   return _el$101;
@@ -3678,7 +3684,7 @@ function ProjectBoard(props) {
                                     })() : null;
                                   },
                                   get children() {
-                                    var _el$117 = _tmpl$8$4();
+                                    var _el$117 = _tmpl$8$5();
                                     _el$117.$$click = () => openEditor('item', item);
                                     createRenderEffect(() => _el$117.disabled = busy()[item.id] || Boolean(item.syncState) || fieldBusy());
                                     return _el$117;
@@ -3700,24 +3706,24 @@ function ProjectBoard(props) {
                           },
                           get fallback() {
                             return memo(() => !!item.url)() ? (() => {
-                              var _el$125 = _tmpl$4$4(),
+                              var _el$125 = _tmpl$4$5(),
                                 _el$126 = _el$125.firstChild;
                               insert(_el$125, () => item.title, _el$126);
                               createRenderEffect(() => setAttribute(_el$125, "href", item.url));
                               return _el$125;
                             })() : memo(() => !!(item.type === 'DraftIssue' && !item.temporary && board().canUpdate))() ? (() => {
-                              var _el$127 = _tmpl$3$4();
+                              var _el$127 = _tmpl$3$5();
                               _el$127.$$click = () => openEditor('item', item);
                               insert(_el$127, () => item.title);
                               return _el$127;
                             })() : (() => {
-                              var _el$128 = _tmpl$5$4();
+                              var _el$128 = _tmpl$5$5();
                               insert(_el$128, () => item.title);
                               return _el$128;
                             })();
                           },
                           get children() {
-                            var _el$119 = _tmpl$3$4();
+                            var _el$119 = _tmpl$3$5();
                             _el$119.$$click = () => props.onOpenTopic(item.channelId);
                             insert(_el$119, () => item.title);
                             return _el$119;
@@ -3748,7 +3754,7 @@ function ProjectBoard(props) {
                             return memo(() => !!canMove())() && !item.temporary;
                           },
                           get children() {
-                            var _el$122 = _tmpl$6$4();
+                            var _el$122 = _tmpl$6$5();
                               _el$122.firstChild;
                             _el$122.addEventListener("change", event => {
                               const target = event.currentTarget.value || null;
@@ -3760,7 +3766,7 @@ function ProjectBoard(props) {
                                 return board().statusField.options;
                               },
                               children: option => (() => {
-                                var _el$129 = _tmpl$7$4();
+                                var _el$129 = _tmpl$7$5();
                                 insert(_el$129, () => option.name);
                                 createRenderEffect(() => _el$129.value = option.id);
                                 return _el$129;
@@ -3939,7 +3945,7 @@ function ProjectBoard(props) {
           insert(_el$51, createComponent(For, {
             each: ['GRAY', 'BLUE', 'GREEN', 'YELLOW', 'ORANGE', 'RED', 'PINK', 'PURPLE'],
             children: color => (() => {
-              var _el$133 = _tmpl$7$4();
+              var _el$133 = _tmpl$7$5();
               _el$133.value = color;
               insert(_el$133, () => color[0] + color.slice(1).toLowerCase());
               return _el$133;
@@ -4049,14 +4055,14 @@ function ProjectBoard(props) {
 }
 delegateEvents(["click", "input", "pointerdown", "keydown"]);
 
-var _tmpl$$3 = /*#__PURE__*/template(`<button type=button>`),
-  _tmpl$2$3 = /*#__PURE__*/template(`<p class=note-error role=alert>`),
-  _tmpl$3$3 = /*#__PURE__*/template(`<button type=button>Check GitHub`),
-  _tmpl$4$3 = /*#__PURE__*/template(`<form class=note-editor><textarea aria-label="Note content"></textarea><div class=note-editor-actions><button type=button>Cancel`),
-  _tmpl$5$3 = /*#__PURE__*/template(`<section class=note-view><div class=note-toolbar><span class=note-type>Note`),
-  _tmpl$6$3 = /*#__PURE__*/template(`<div class=note-content>`),
-  _tmpl$7$3 = /*#__PURE__*/template(`<span class=muted>This note is empty.`),
-  _tmpl$8$3 = /*#__PURE__*/template(`<button type=submit>`);
+var _tmpl$$4 = /*#__PURE__*/template(`<button type=button>`),
+  _tmpl$2$4 = /*#__PURE__*/template(`<p class=note-error role=alert>`),
+  _tmpl$3$4 = /*#__PURE__*/template(`<button type=button>Check GitHub`),
+  _tmpl$4$4 = /*#__PURE__*/template(`<form class=note-editor><textarea aria-label="Note content"></textarea><div class=note-editor-actions><button type=button>Cancel`),
+  _tmpl$5$4 = /*#__PURE__*/template(`<section class=note-view><div class=note-toolbar><span class=note-type>Note`),
+  _tmpl$6$4 = /*#__PURE__*/template(`<div class=note-content>`),
+  _tmpl$7$4 = /*#__PURE__*/template(`<span class=muted>This note is empty.`),
+  _tmpl$8$4 = /*#__PURE__*/template(`<button type=submit>`);
 function NoteView(props) {
   function savedDraft() {
     try {
@@ -4106,7 +4112,7 @@ function NoteView(props) {
   }
   async function save(event) {
     event.preventDefault();
-    if (busy() || uncertain()) return;
+    if (busy() || uncertain() || draft() === base()) return;
     setBusy(true);
     props.onBusyChange(true);
     setError('');
@@ -4147,7 +4153,7 @@ function NoteView(props) {
     }
   }
   return (() => {
-    var _el$ = _tmpl$5$3(),
+    var _el$ = _tmpl$5$4(),
       _el$2 = _el$.firstChild;
       _el$2.firstChild;
     insert(_el$2, createComponent(Show, {
@@ -4155,7 +4161,7 @@ function NoteView(props) {
         return !editing();
       },
       get children() {
-        var _el$4 = _tmpl$$3();
+        var _el$4 = _tmpl$$4();
         _el$4.$$click = edit;
         insert(_el$4, () => hasDraft() ? 'Resume draft' : 'Edit note');
         createRenderEffect(() => _el$4.disabled = busy());
@@ -4167,7 +4173,7 @@ function NoteView(props) {
         return error();
       },
       get children() {
-        var _el$5 = _tmpl$2$3();
+        var _el$5 = _tmpl$2$4();
         insert(_el$5, error);
         return _el$5;
       }
@@ -4178,13 +4184,13 @@ function NoteView(props) {
       },
       get fallback() {
         return (() => {
-          var _el$1 = _tmpl$6$3();
-          insert(_el$1, () => props.topic.description || _tmpl$7$3());
+          var _el$1 = _tmpl$6$4();
+          insert(_el$1, () => props.topic.description || _tmpl$7$4());
           return _el$1;
         })();
       },
       get children() {
-        var _el$6 = _tmpl$4$3(),
+        var _el$6 = _tmpl$4$4(),
           _el$7 = _el$6.firstChild,
           _el$8 = _el$7.nextSibling,
           _el$0 = _el$8.firstChild;
@@ -4200,14 +4206,14 @@ function NoteView(props) {
           },
           get fallback() {
             return (() => {
-              var _el$11 = _tmpl$8$3();
+              var _el$11 = _tmpl$8$4();
               insert(_el$11, () => busy() ? 'Saving…' : 'Save');
-              createRenderEffect(() => _el$11.disabled = busy() || draft() === base());
+              createRenderEffect(() => _el$11.disabled = busy());
               return _el$11;
             })();
           },
           get children() {
-            var _el$9 = _tmpl$3$3();
+            var _el$9 = _tmpl$3$4();
             _el$9.$$click = checkSave;
             createRenderEffect(() => _el$9.disabled = busy());
             return _el$9;
@@ -4293,20 +4299,19 @@ function appendChecklistItem(body, text) {
   return `${body}${body && !/\r?\n$/.test(body) ? body.includes('\r\n') ? '\r\n' : '\n' : ''}- [ ] ${item}`;
 }
 
-var _tmpl$$2 = /*#__PURE__*/template(`<button type=button>`),
-  _tmpl$2$2 = /*#__PURE__*/template(`<p class=list-error role=alert>`),
-  _tmpl$3$2 = /*#__PURE__*/template(`<button type=button class=list-check-save>Check GitHub before trying again`),
-  _tmpl$4$2 = /*#__PURE__*/template(`<form class=list-source-editor><textarea aria-label="List Markdown"></textarea><div class=list-source-actions><button type=submit>Save</button><button type=button>Cancel`),
-  _tmpl$5$2 = /*#__PURE__*/template(`<section class=list-view><div class=list-toolbar><span class=list-progress> of <!> complete`),
-  _tmpl$6$2 = /*#__PURE__*/template(`<form class=list-add><input type=text aria-label="New list item"placeholder="Add an item"maxlength=500><button type=submit>Add`),
-  _tmpl$7$2 = /*#__PURE__*/template(`<p class=list-other-content>This list also contains other Markdown. Use Edit Markdown to view or change it.`),
-  _tmpl$8$2 = /*#__PURE__*/template(`<div class=list-items>`),
-  _tmpl$9$2 = /*#__PURE__*/template(`<p class=muted>No items yet.`),
-  _tmpl$0$2 = /*#__PURE__*/template(`<form class=list-item-edit><input type=text aria-label="Edit list item"maxlength=500><button type=submit>Save</button><button type=button>Cancel`),
-  _tmpl$1$2 = /*#__PURE__*/template(`<div class=list-item>`),
-  _tmpl$10$2 = /*#__PURE__*/template(`<label><input type=checkbox><span>`),
-  _tmpl$11$1 = /*#__PURE__*/template(`<button type=button>Edit`),
-  _tmpl$12$1 = /*#__PURE__*/template(`<button type=button>Remove`);
+var _tmpl$$3 = /*#__PURE__*/template(`<button type=button>`),
+  _tmpl$2$3 = /*#__PURE__*/template(`<p class=list-error role=alert>`),
+  _tmpl$3$3 = /*#__PURE__*/template(`<button type=button class=list-check-save>Check GitHub before trying again`),
+  _tmpl$4$3 = /*#__PURE__*/template(`<form class=list-source-editor><textarea aria-label="List Markdown"></textarea><div class=list-source-actions><button type=submit>Save</button><button type=button>Cancel`),
+  _tmpl$5$3 = /*#__PURE__*/template(`<section class=list-view><div class=list-toolbar><span class=list-progress> of <!> complete`),
+  _tmpl$6$3 = /*#__PURE__*/template(`<p class=list-other-content>This list also contains other Markdown. Use Edit Markdown to view or change it.`),
+  _tmpl$7$3 = /*#__PURE__*/template(`<div class=list-items><form class=list-add><input type=text aria-label="New list item"placeholder="Add an item"maxlength=500><button type=submit>Add`),
+  _tmpl$8$3 = /*#__PURE__*/template(`<p class=muted>No items yet.`),
+  _tmpl$9$2 = /*#__PURE__*/template(`<form class=list-item-edit><input type=text aria-label="Edit list item"maxlength=500><button type=submit>Save</button><button type=button>Cancel`),
+  _tmpl$0$2 = /*#__PURE__*/template(`<div class=list-item>`),
+  _tmpl$1$2 = /*#__PURE__*/template(`<label><input type=checkbox><span>`),
+  _tmpl$10$2 = /*#__PURE__*/template(`<button type=button>Edit`),
+  _tmpl$11$1 = /*#__PURE__*/template(`<button type=button>Remove`);
 function ListView(props) {
   const [newItem, setNewItem] = createSignal('');
   const [editingIndex, setEditingIndex] = createSignal(null);
@@ -4410,7 +4415,7 @@ function ListView(props) {
     setEditingText(item.text);
   }
   return (() => {
-    var _el$ = _tmpl$5$2(),
+    var _el$ = _tmpl$5$3(),
       _el$2 = _el$.firstChild,
       _el$3 = _el$2.firstChild,
       _el$4 = _el$3.firstChild,
@@ -4423,7 +4428,7 @@ function ListView(props) {
         return !sourceEditing();
       },
       get children() {
-        var _el$7 = _tmpl$$2();
+        var _el$7 = _tmpl$$3();
         _el$7.$$click = openSource;
         insert(_el$7, () => hasSourceDraft() ? 'Resume Markdown draft' : 'Edit Markdown');
         createRenderEffect(() => _el$7.disabled = busy() || uncertain());
@@ -4435,7 +4440,7 @@ function ListView(props) {
         return error();
       },
       get children() {
-        var _el$8 = _tmpl$2$2();
+        var _el$8 = _tmpl$2$3();
         insert(_el$8, error);
         return _el$8;
       }
@@ -4445,7 +4450,7 @@ function ListView(props) {
         return uncertain();
       },
       get children() {
-        var _el$9 = _tmpl$3$2();
+        var _el$9 = _tmpl$3$3();
         _el$9.$$click = checkSave;
         createRenderEffect(() => _el$9.disabled = busy());
         return _el$9;
@@ -4456,35 +4461,17 @@ function ListView(props) {
         return sourceEditing();
       },
       get fallback() {
-        return [(() => {
-          var _el$13 = _tmpl$6$2(),
-            _el$14 = _el$13.firstChild,
-            _el$15 = _el$14.nextSibling;
-          _el$13.addEventListener("submit", event => {
-            event.preventDefault();
-            if (newItem().trim()) write(appendChecklistItem(props.topic.description, newItem()), () => setNewItem(''));
-          });
-          _el$14.$$input = event => setNewItem(event.currentTarget.value);
-          createRenderEffect(_p$ => {
-            var _v$4 = busy() || uncertain(),
-              _v$5 = busy() || uncertain() || !newItem().trim();
-            _v$4 !== _p$.e && (_el$14.disabled = _p$.e = _v$4);
-            _v$5 !== _p$.t && (_el$15.disabled = _p$.t = _v$5);
-            return _p$;
-          }, {
-            e: undefined,
-            t: undefined
-          });
-          createRenderEffect(() => _el$14.value = newItem());
-          return _el$13;
-        })(), (() => {
-          var _el$16 = _tmpl$8$2();
-          insert(_el$16, createComponent(Show, {
+        return (() => {
+          var _el$13 = _tmpl$7$3(),
+            _el$15 = _el$13.firstChild,
+            _el$16 = _el$15.firstChild,
+            _el$17 = _el$16.nextSibling;
+          insert(_el$13, createComponent(Show, {
             get when() {
               return parsed().items.length;
             },
             get fallback() {
-              return _tmpl$9$2();
+              return _tmpl$8$3();
             },
             get children() {
               return createComponent(For, {
@@ -4492,14 +4479,14 @@ function ListView(props) {
                   return parsed().items;
                 },
                 children: item => (() => {
-                  var _el$19 = _tmpl$1$2();
+                  var _el$19 = _tmpl$0$2();
                   insert(_el$19, createComponent(Show, {
                     get when() {
                       return editingIndex() === item.index;
                     },
                     get fallback() {
                       return [(() => {
-                        var _el$24 = _tmpl$10$2(),
+                        var _el$24 = _tmpl$1$2(),
                           _el$25 = _el$24.firstChild,
                           _el$26 = _el$25.nextSibling;
                         _el$25.addEventListener("change", event => {
@@ -4520,7 +4507,7 @@ function ListView(props) {
                         createRenderEffect(() => _el$25.checked = item.checked);
                         return _el$24;
                       })(), (() => {
-                        var _el$27 = _tmpl$11$1();
+                        var _el$27 = _tmpl$10$2();
                         _el$27.$$click = () => editItem(item);
                         createRenderEffect(_p$ => {
                           var _v$1 = busy() || uncertain(),
@@ -4534,7 +4521,7 @@ function ListView(props) {
                         });
                         return _el$27;
                       })(), (() => {
-                        var _el$28 = _tmpl$12$1();
+                        var _el$28 = _tmpl$11$1();
                         _el$28.$$click = () => write(changeChecklistItem(props.topic.description, item.index, 'remove'));
                         createRenderEffect(_p$ => {
                           var _v$11 = busy() || uncertain(),
@@ -4550,7 +4537,7 @@ function ListView(props) {
                       })()];
                     },
                     get children() {
-                      var _el$20 = _tmpl$0$2(),
+                      var _el$20 = _tmpl$9$2(),
                         _el$21 = _el$20.firstChild,
                         _el$22 = _el$21.nextSibling,
                         _el$23 = _el$22.nextSibling;
@@ -4582,20 +4569,36 @@ function ListView(props) {
                 })()
               });
             }
-          }), null);
-          insert(_el$16, createComponent(Show, {
+          }), _el$15);
+          insert(_el$13, createComponent(Show, {
             get when() {
               return parsed().lines.some(line => line.trim() && !/^\s*[-*+]\s+\[[ xX]\]\s+/.test(line));
             },
             get children() {
-              return _tmpl$7$2();
+              return _tmpl$6$3();
             }
-          }), null);
-          return _el$16;
-        })()];
+          }), _el$15);
+          _el$15.addEventListener("submit", event => {
+            event.preventDefault();
+            if (newItem().trim()) write(appendChecklistItem(props.topic.description, newItem()), () => setNewItem(''));
+          });
+          _el$16.$$input = event => setNewItem(event.currentTarget.value);
+          createRenderEffect(_p$ => {
+            var _v$4 = busy() || uncertain(),
+              _v$5 = busy() || uncertain() || !newItem().trim();
+            _v$4 !== _p$.e && (_el$16.disabled = _p$.e = _v$4);
+            _v$5 !== _p$.t && (_el$17.disabled = _p$.t = _v$5);
+            return _p$;
+          }, {
+            e: undefined,
+            t: undefined
+          });
+          createRenderEffect(() => _el$16.value = newItem());
+          return _el$13;
+        })();
       },
       get children() {
-        var _el$0 = _tmpl$4$2(),
+        var _el$0 = _tmpl$4$3(),
           _el$1 = _el$0.firstChild,
           _el$10 = _el$1.nextSibling,
           _el$11 = _el$10.firstChild,
@@ -4639,6 +4642,190 @@ function ListView(props) {
   })();
 }
 delegateEvents(["click", "input"]);
+
+var _tmpl$$2 = /*#__PURE__*/template(`<p class=talk-description-error role=alert>`),
+  _tmpl$2$2 = /*#__PURE__*/template(`<button type=button>Check GitHub`),
+  _tmpl$3$2 = /*#__PURE__*/template(`<button type=button class=talk-description-delete>Delete`),
+  _tmpl$4$2 = /*#__PURE__*/template(`<form class=talk-description-form><textarea aria-label="Topic description"rows=5></textarea><div class=talk-description-actions><button type=button class=talk-description-cancel>Cancel`),
+  _tmpl$5$2 = /*#__PURE__*/template(`<div class=talk-description>`),
+  _tmpl$6$2 = /*#__PURE__*/template(`<p class="muted talk-description-text">`),
+  _tmpl$7$2 = /*#__PURE__*/template(`<div class=talk-description-display><button type=button class=talk-description-edit>`),
+  _tmpl$8$2 = /*#__PURE__*/template(`<button type=submit>`);
+function TalkDescription(props) {
+  const [editing, setEditing] = createSignal(false);
+  const [draft, setDraft] = createSignal('');
+  const [base, setBase] = createSignal('');
+  const [busy, setBusy] = createSignal(false);
+  const [uncertain, setUncertain] = createSignal(false);
+  const [error, setError] = createSignal('');
+  const [pendingBody, setPendingBody] = createSignal('');
+  async function edit() {
+    setBusy(true);
+    setError('');
+    try {
+      const latest = await props.api.readTalk(props.topic.id);
+      setBase(latest.description);
+      setDraft(latest.description);
+      setEditing(true);
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function write(nextBody) {
+    if (busy() || uncertain() || nextBody === base()) return;
+    setPendingBody(nextBody);
+    setBusy(true);
+    props.onBusyChange(true);
+    setError('');
+    try {
+      const updated = await props.api.updateTalkDescription(props.topic.id, nextBody, base());
+      props.onUpdated(updated);
+      setEditing(false);
+    } catch (failure) {
+      setUncertain(Boolean(failure.uncertain));
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+      props.onBusyChange(false);
+    }
+  }
+  function save(event) {
+    event.preventDefault();
+    write(draft());
+  }
+  async function checkSave() {
+    setBusy(true);
+    setError('');
+    try {
+      const latest = await props.api.readTalk(props.topic.id);
+      props.onUpdated(latest);
+      if (latest.description === pendingBody()) {
+        setEditing(false);
+        setUncertain(false);
+      } else if (latest.description === base()) {
+        setUncertain(false);
+        setError('The description is unchanged on GitHub. You can try saving again.');
+      } else {
+        setUncertain(false);
+        setError('The description changed on GitHub. Copy your draft before editing the latest version.');
+      }
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (() => {
+    var _el$ = _tmpl$5$2();
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return error();
+      },
+      get children() {
+        var _el$2 = _tmpl$$2();
+        insert(_el$2, error);
+        return _el$2;
+      }
+    }), null);
+    insert(_el$, createComponent(Show, {
+      get when() {
+        return editing();
+      },
+      get fallback() {
+        return (() => {
+          var _el$9 = _tmpl$7$2(),
+            _el$1 = _el$9.firstChild;
+          insert(_el$9, createComponent(Show, {
+            get when() {
+              return props.topic.description;
+            },
+            get children() {
+              var _el$0 = _tmpl$6$2();
+              insert(_el$0, () => props.topic.description);
+              return _el$0;
+            }
+          }), _el$1);
+          _el$1.$$click = edit;
+          insert(_el$1, (() => {
+            var _c$ = memo(() => !!busy());
+            return () => _c$() ? 'Loading…' : props.topic.description ? 'Edit' : '+ add topic body';
+          })());
+          createRenderEffect(_p$ => {
+            var _v$3 = !!Boolean(props.topic.description),
+              _v$4 = busy();
+            _v$3 !== _p$.e && _el$9.classList.toggle("has-description", _p$.e = _v$3);
+            _v$4 !== _p$.t && (_el$1.disabled = _p$.t = _v$4);
+            return _p$;
+          }, {
+            e: undefined,
+            t: undefined
+          });
+          return _el$9;
+        })();
+      },
+      get children() {
+        var _el$3 = _tmpl$4$2(),
+          _el$4 = _el$3.firstChild,
+          _el$5 = _el$4.nextSibling,
+          _el$7 = _el$5.firstChild;
+        _el$3.addEventListener("submit", save);
+        _el$4.$$input = event => setDraft(event.currentTarget.value);
+        insert(_el$5, createComponent(Show, {
+          get when() {
+            return uncertain();
+          },
+          get fallback() {
+            return (() => {
+              var _el$10 = _tmpl$8$2();
+              insert(_el$10, () => busy() ? 'Saving…' : 'Save');
+              createRenderEffect(() => _el$10.disabled = busy());
+              return _el$10;
+            })();
+          },
+          get children() {
+            var _el$6 = _tmpl$2$2();
+            _el$6.$$click = checkSave;
+            createRenderEffect(() => _el$6.disabled = busy());
+            return _el$6;
+          }
+        }), _el$7);
+        _el$7.$$click = () => {
+          setEditing(false);
+          setUncertain(false);
+          setError('');
+        };
+        insert(_el$5, createComponent(Show, {
+          get when() {
+            return base();
+          },
+          get children() {
+            var _el$8 = _tmpl$3$2();
+            _el$8.$$click = () => write('');
+            createRenderEffect(() => _el$8.disabled = busy() || uncertain());
+            return _el$8;
+          }
+        }), null);
+        createRenderEffect(_p$ => {
+          var _v$ = busy(),
+            _v$2 = busy();
+          _v$ !== _p$.e && (_el$4.disabled = _p$.e = _v$);
+          _v$2 !== _p$.t && (_el$7.disabled = _p$.t = _v$2);
+          return _p$;
+        }, {
+          e: undefined,
+          t: undefined
+        });
+        createRenderEffect(() => _el$4.value = draft());
+        return _el$3;
+      }
+    }), null);
+    createRenderEffect(() => _el$.classList.toggle("is-editing", !!editing()));
+    return _el$;
+  })();
+}
+delegateEvents(["input", "click"]);
 
 var _tmpl$$1 = /*#__PURE__*/template(`<div class=repository-current><span></span><button type=button class=repository-permit aria-haspopup=dialog>`),
   _tmpl$2$1 = /*#__PURE__*/template(`<div class=repository-recents role=group aria-label="Recent repositories">`),
@@ -5248,8 +5435,8 @@ var _tmpl$ = /*#__PURE__*/template(`<section class=app-shell><aside class=sideba
   _tmpl$44 = /*#__PURE__*/template(`<label class=topic-milestone-select><span class=sr-only>Goal</span><span class=topic-milestone-value aria-hidden=true></span><svg width=12 height=12 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg><select aria-label="Add to goal"><option value>None`),
   _tmpl$45 = /*#__PURE__*/template(`<form class=topic-tag-form aria-label="Add topic tag"><input type=text aria-label="Tag name"placeholder="Tag name"list=topic-tag-suggestions maxlength=50 required><datalist id=topic-tag-suggestions></datalist><button type=submit>Add</button><button type=button aria-label="Cancel tag">×`),
   _tmpl$46 = /*#__PURE__*/template(`<div class=message-list role=log aria-label=Messages aria-live=polite aria-relevant=additions>`),
-  _tmpl$47 = /*#__PURE__*/template(`<form class=composer><div class=composer-box><textarea rows=2></textarea><button type=submit>Send <span aria-hidden=true>↗</span></button></div><p class=composer-hint>Enter to send · Shift + Enter for a new line <span>/`),
-  _tmpl$48 = /*#__PURE__*/template(`<section class=chat-panel><header class=chat-header><h2> </h2><div class=chat-header-actions><a class=preview-badge target=_blank rel=noreferrer>GitHub ↗</a></div></header><div class=chat-topic-controls><button type=button class=topic-status aria-haspopup=dialog><span class=topic-status-dot aria-hidden=true></span></button></div><div class=topic-tags aria-label="Topic tags">`),
+  _tmpl$47 = /*#__PURE__*/template(`<form class=composer><div class=composer-box><textarea placeholder="send message"rows=2></textarea><button type=submit>Send <span aria-hidden=true>↗</span></button></div><p class=composer-hint>Enter to send · Shift + Enter for a new line <span>/`),
+  _tmpl$48 = /*#__PURE__*/template(`<section class=chat-panel><header class=chat-header><h2></h2><div class=chat-header-actions><a class=preview-badge target=_blank rel=noreferrer>GitHub ↗</a></div></header><div class=chat-topic-controls><button type=button class=topic-status aria-haspopup=dialog><span class=topic-status-dot aria-hidden=true></span></button></div><div class=topic-tags aria-label="Topic tags">`),
   _tmpl$49 = /*#__PURE__*/template(`<section class="chat-panel empty-chat"><h2></h2><p class=muted></p><button type=button>New topic`),
   _tmpl$50 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ `),
   _tmpl$51 = /*#__PURE__*/template(`<span class=topic-tag><span class=topic-tag-dot aria-hidden=true></span><span class=topic-tag-name></span><button type=button>×`),
@@ -5593,7 +5780,8 @@ function Workspace(props) {
   const [projectWriting, setProjectWriting] = createSignal(false);
   const [noteWriting, setNoteWriting] = createSignal(false);
   const [listWriting, setListWriting] = createSignal(false);
-  const switchingDisabled = () => creating() || milestoneSaving() || milestoneStateBusy() || reactionBusy() || projectWriting() || noteWriting() || listWriting() || Object.values(assignmentBusy()).some(Boolean) || Object.values(closing()).some(change => change?.status === 'pending') || Object.values(tagOperations()).some(operation => operation?.status === 'pending') || Object.values(outbox()).some(entry => entry?.state === 'pending');
+  const [talkWriting, setTalkWriting] = createSignal(false);
+  const switchingDisabled = () => creating() || milestoneSaving() || milestoneStateBusy() || reactionBusy() || projectWriting() || noteWriting() || listWriting() || talkWriting() || Object.values(assignmentBusy()).some(Boolean) || Object.values(closing()).some(change => change?.status === 'pending') || Object.values(tagOperations()).some(operation => operation?.status === 'pending') || Object.values(outbox()).some(entry => entry?.state === 'pending');
   onCleanup(() => props.sessionState.set(workspaceKey, {
     drafts: drafts(),
     outbox: outbox()
@@ -5898,6 +6086,8 @@ function Workspace(props) {
       rememberChange({
         id,
         tags
+      }, {
+        dimSidebar: false
       });
       setKnownTags(previous => [...new Map([...previous, ...tags].map(tag => [tag.name.toLowerCase(), tag])).values()]);
       setTagOperations(previous => ({
@@ -5990,6 +6180,8 @@ function Workspace(props) {
       rememberChange({
         ...updated,
         parentId: topics().find(item => item.id === id)?.parentId ?? null
+      }, {
+        dimSidebar: false
       });
       refresh();
     } catch (failure) {
@@ -6408,11 +6600,14 @@ function Workspace(props) {
       return next;
     });
   }
-  function rememberChange(change) {
+  function rememberChange(change, {
+    dimSidebar = true
+  } = {}) {
     const previous = topics().find(item => item.id === change.id);
     const updated = topicTracker.remember({
       ...previous,
       ...change,
+      dimSidebar,
       parentId: change.parentId === undefined ? previous?.parentId ?? null : change.parentId
     });
     channelRevision += 1;
@@ -6865,7 +7060,7 @@ function Workspace(props) {
         createRenderEffect(_p$ => {
           var _v$41 = `${Math.min(item.depth, 5) * 16}px`,
             _v$42 = !!(activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id),
-            _v$43 = !!(Boolean(closing()[item.id]) || item.syncState === 'confirming'),
+            _v$43 = !!(Boolean(closing()[item.id]) || item.syncState === 'confirming' && item.dimSidebar !== false),
             _v$44 = closing()[item.id]?.status === 'pending' || item.syncState === 'confirming',
             _v$45 = activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined,
             _v$46 = Boolean(closing()[item.id]),
@@ -7069,176 +7264,189 @@ function Workspace(props) {
               },
               get fallback() {
                 return (() => {
-                  var _el$174 = _tmpl$49(),
-                    _el$175 = _el$174.firstChild,
-                    _el$176 = _el$175.nextSibling,
-                    _el$178 = _el$176.nextSibling;
-                  insert(_el$175, () => !isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet');
-                  insert(_el$176, !isConfigured ? 'Open the repository menu and choose Permit to connect.' : 'Create a topic to start a conversation.');
-                  insert(_el$174, createComponent(Show, {
+                  var _el$173 = _tmpl$49(),
+                    _el$174 = _el$173.firstChild,
+                    _el$175 = _el$174.nextSibling,
+                    _el$177 = _el$175.nextSibling;
+                  insert(_el$174, () => !isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet');
+                  insert(_el$175, !isConfigured ? 'Open the repository menu and choose Permit to connect.' : 'Create a topic to start a conversation.');
+                  insert(_el$173, createComponent(Show, {
                     get when() {
                       return error();
                     },
                     get children() {
-                      var _el$177 = _tmpl$2();
-                      insert(_el$177, error);
-                      return _el$177;
+                      var _el$176 = _tmpl$2();
+                      insert(_el$176, error);
+                      return _el$176;
                     }
-                  }), _el$178);
-                  _el$178.$$click = () => startTopic();
-                  createRenderEffect(() => _el$178.disabled = !isConfigured || syncing());
-                  return _el$174;
+                  }), _el$177);
+                  _el$177.$$click = () => startTopic();
+                  createRenderEffect(() => _el$177.disabled = !isConfigured || syncing());
+                  return _el$173;
                 })();
               },
               get children() {
                 var _el$137 = _tmpl$48(),
                   _el$138 = _el$137.firstChild,
                   _el$139 = _el$138.firstChild,
-                  _el$140 = _el$139.firstChild,
-                  _el$142 = _el$139.nextSibling,
-                  _el$143 = _el$142.firstChild,
-                  _el$147 = _el$138.nextSibling,
-                  _el$157 = _el$147.firstChild;
-                  _el$157.firstChild;
-                  var _el$159 = _el$147.nextSibling;
-                insert(_el$139, createComponent(TopicMarker, {
-                  get kind() {
-                    return topic().kind;
-                  }
-                }), _el$140);
-                insert(_el$139, () => topic().name, null);
+                  _el$141 = _el$139.nextSibling,
+                  _el$142 = _el$141.firstChild,
+                  _el$146 = _el$138.nextSibling,
+                  _el$156 = _el$146.firstChild;
+                  _el$156.firstChild;
+                  var _el$158 = _el$146.nextSibling;
+                insert(_el$139, () => topic().name);
                 insert(_el$138, createComponent(Show, {
                   get when() {
-                    return !['note', 'list'].includes(topic().kind);
+                    return topic().kind === 'discussion';
                   },
                   get children() {
-                    var _el$141 = _tmpl$41();
-                    insert(_el$141, () => topic().description);
-                    return _el$141;
+                    var _el$140 = _tmpl$41();
+                    insert(_el$140, () => topic().description);
+                    return _el$140;
                   }
-                }), _el$142);
+                }), _el$141);
+                insert(_el$137, createComponent(Show, {
+                  get when() {
+                    return memo(() => topic().kind === 'talk')() ? topic().id : null;
+                  },
+                  keyed: true,
+                  children: () => createComponent(TalkDescription, {
+                    get topic() {
+                      return topic();
+                    },
+                    api: api,
+                    onBusyChange: setTalkWriting,
+                    onUpdated: updated => rememberChange({
+                      ...updated,
+                      parentId: topics().find(item => item.id === updated.id)?.parentId ?? null
+                    }, {
+                      dimSidebar: false
+                    })
+                  })
+                }), _el$146);
                 insert(_el$137, createComponent(Show, {
                   get when() {
                     return error();
                   },
                   get children() {
-                    var _el$144 = _tmpl$4(),
-                      _el$145 = _el$144.firstChild,
-                      _el$146 = _el$145.nextSibling;
-                    insert(_el$144, error, _el$145);
-                    _el$146.$$click = () => setError('');
-                    return _el$144;
+                    var _el$143 = _tmpl$4(),
+                      _el$144 = _el$143.firstChild,
+                      _el$145 = _el$144.nextSibling;
+                    insert(_el$143, error, _el$144);
+                    _el$145.$$click = () => setError('');
+                    return _el$143;
                   }
-                }), _el$147);
-                insert(_el$147, createComponent(Show, {
+                }), _el$146);
+                insert(_el$146, createComponent(Show, {
                   get when() {
                     return projectsEnabled && returnProjectId();
                   },
                   get children() {
-                    var _el$148 = _tmpl$42();
-                    _el$148.$$click = () => selectProject(returnProjectId());
-                    return _el$148;
+                    var _el$147 = _tmpl$42();
+                    _el$147.$$click = () => selectProject(returnProjectId());
+                    return _el$147;
                   }
-                }), _el$157);
-                insert(_el$147, createComponent(Show, {
+                }), _el$156);
+                insert(_el$146, createComponent(Show, {
                   get when() {
                     return topics().find(item => item.id === topic().parentId);
                   },
                   children: parent => (() => {
-                    var _el$179 = _tmpl$50();
-                      _el$179.firstChild;
-                    _el$179.$$click = () => selectTopic(parent().id);
-                    insert(_el$179, () => parent().name, null);
-                    return _el$179;
+                    var _el$178 = _tmpl$50();
+                      _el$178.firstChild;
+                    _el$178.$$click = () => selectTopic(parent().id);
+                    insert(_el$178, () => parent().name, null);
+                    return _el$178;
                   })()
-                }), _el$157);
-                insert(_el$147, createComponent(Show, {
+                }), _el$156);
+                insert(_el$146, createComponent(Show, {
                   get when() {
                     return topic().kind !== 'discussion';
                   },
                   get children() {
-                    var _el$149 = _tmpl$44(),
-                      _el$150 = _el$149.firstChild,
+                    var _el$148 = _tmpl$44(),
+                      _el$149 = _el$148.firstChild,
+                      _el$150 = _el$149.nextSibling,
                       _el$151 = _el$150.nextSibling,
-                      _el$152 = _el$151.nextSibling,
-                      _el$153 = _el$152.nextSibling;
-                      _el$153.firstChild;
-                    insert(_el$151, topicMilestoneLabel);
-                    _el$153.addEventListener("change", event => {
+                      _el$152 = _el$151.nextSibling;
+                      _el$152.firstChild;
+                    insert(_el$150, topicMilestoneLabel);
+                    _el$152.addEventListener("change", event => {
                       const id = topic().id;
                       const next = event.currentTarget.value ? Number(event.currentTarget.value) : null;
                       event.currentTarget.value = String(topic().milestoneId ?? '');
                       assignMilestone(id, next);
                     });
-                    insert(_el$153, createComponent(Show, {
+                    insert(_el$152, createComponent(Show, {
                       get when() {
                         return memo(() => !!topic().milestoneId)() && !milestones().some(item => item.id === topic().milestoneId);
                       },
                       get children() {
-                        var _el$155 = _tmpl$43();
-                          _el$155.firstChild;
-                        insert(_el$155, () => topic().milestoneId, null);
-                        createRenderEffect(() => _el$155.value = topic().milestoneId);
-                        return _el$155;
+                        var _el$154 = _tmpl$43();
+                          _el$154.firstChild;
+                        insert(_el$154, () => topic().milestoneId, null);
+                        createRenderEffect(() => _el$154.value = topic().milestoneId);
+                        return _el$154;
                       }
                     }), null);
-                    insert(_el$153, createComponent(For, {
+                    insert(_el$152, createComponent(For, {
                       get each() {
                         return milestones();
                       },
                       children: item => (() => {
-                        var _el$181 = _tmpl$8();
-                        insert(_el$181, () => item.name, null);
-                        insert(_el$181, () => item.state === 'closed' ? ' (closed)' : '', null);
-                        createRenderEffect(() => _el$181.value = item.id);
-                        return _el$181;
+                        var _el$180 = _tmpl$8();
+                        insert(_el$180, () => item.name, null);
+                        insert(_el$180, () => item.state === 'closed' ? ' (closed)' : '', null);
+                        createRenderEffect(() => _el$180.value = item.id);
+                        return _el$180;
                       })()
                     }), null);
                     createRenderEffect(_p$ => {
                       var _v$57 = !!assignmentBusy()[topic().id],
                         _v$58 = topicMilestoneLabel(),
                         _v$59 = assignmentBusy()[topic().id] || !milestonesLoaded();
-                      _v$57 !== _p$.e && _el$149.classList.toggle("is-pending", _p$.e = _v$57);
-                      _v$58 !== _p$.t && setAttribute(_el$149, "title", _p$.t = _v$58);
-                      _v$59 !== _p$.a && (_el$153.disabled = _p$.a = _v$59);
+                      _v$57 !== _p$.e && _el$148.classList.toggle("is-pending", _p$.e = _v$57);
+                      _v$58 !== _p$.t && setAttribute(_el$148, "title", _p$.t = _v$58);
+                      _v$59 !== _p$.a && (_el$152.disabled = _p$.a = _v$59);
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined,
                       a: undefined
                     });
-                    createRenderEffect(() => _el$153.value = topic().milestoneId ?? '');
-                    return _el$149;
+                    createRenderEffect(() => _el$152.value = topic().milestoneId ?? '');
+                    return _el$148;
                   }
-                }), _el$157);
-                _el$157.$$click = () => requestStatusChange(topic());
-                insert(_el$157, () => statusLabel(topic().id) || (topic().state === 'open' ? 'Open' : 'Closed'), null);
-                insert(_el$159, createComponent(For, {
+                }), _el$156);
+                _el$156.$$click = () => requestStatusChange(topic());
+                insert(_el$156, () => statusLabel(topic().id) || (topic().state === 'open' ? 'Open' : 'Closed'), null);
+                insert(_el$158, createComponent(For, {
                   get each() {
                     return displayedTags();
                   },
                   children: tag => (() => {
-                    var _el$182 = _tmpl$51(),
-                      _el$183 = _el$182.firstChild,
-                      _el$184 = _el$183.nextSibling,
-                      _el$185 = _el$184.nextSibling;
-                    insert(_el$184, () => tag.name);
-                    _el$185.$$click = () => changeTag(topic().id, tag.name, 'remove');
+                    var _el$181 = _tmpl$51(),
+                      _el$182 = _el$181.firstChild,
+                      _el$183 = _el$182.nextSibling,
+                      _el$184 = _el$183.nextSibling;
+                    insert(_el$183, () => tag.name);
+                    _el$184.$$click = () => changeTag(topic().id, tag.name, 'remove');
                     createRenderEffect(_p$ => {
-                      var _v$68 = !!(tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase()),
-                        _v$69 = tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase(),
-                        _v$70 = tag.description || tag.name,
-                        _v$71 = `#${tag.color}`,
-                        _v$72 = Boolean(tagOperations()[topic().id]),
-                        _v$73 = `Remove tag ${tag.name}`,
-                        _v$74 = `Remove tag ${tag.name}`;
-                      _v$68 !== _p$.e && _el$182.classList.toggle("is-pending", _p$.e = _v$68);
-                      _v$69 !== _p$.t && setAttribute(_el$182, "aria-busy", _p$.t = _v$69);
-                      _v$70 !== _p$.a && setAttribute(_el$182, "title", _p$.a = _v$70);
-                      _v$71 !== _p$.o && setStyleProperty(_el$183, "background", _p$.o = _v$71);
-                      _v$72 !== _p$.i && (_el$185.disabled = _p$.i = _v$72);
-                      _v$73 !== _p$.n && setAttribute(_el$185, "aria-label", _p$.n = _v$73);
-                      _v$74 !== _p$.s && setAttribute(_el$185, "title", _p$.s = _v$74);
+                      var _v$67 = !!(tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase()),
+                        _v$68 = tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase(),
+                        _v$69 = tag.description || tag.name,
+                        _v$70 = `#${tag.color}`,
+                        _v$71 = Boolean(tagOperations()[topic().id]),
+                        _v$72 = `Remove tag ${tag.name}`,
+                        _v$73 = `Remove tag ${tag.name}`;
+                      _v$67 !== _p$.e && _el$181.classList.toggle("is-pending", _p$.e = _v$67);
+                      _v$68 !== _p$.t && setAttribute(_el$181, "aria-busy", _p$.t = _v$68);
+                      _v$69 !== _p$.a && setAttribute(_el$181, "title", _p$.a = _v$69);
+                      _v$70 !== _p$.o && setStyleProperty(_el$182, "background", _p$.o = _v$70);
+                      _v$71 !== _p$.i && (_el$184.disabled = _p$.i = _v$71);
+                      _v$72 !== _p$.n && setAttribute(_el$184, "aria-label", _p$.n = _v$72);
+                      _v$73 !== _p$.s && setAttribute(_el$184, "title", _p$.s = _v$73);
                       return _p$;
                     }, {
                       e: undefined,
@@ -7249,56 +7457,56 @@ function Workspace(props) {
                       n: undefined,
                       s: undefined
                     });
-                    return _el$182;
+                    return _el$181;
                   })()
                 }), null);
-                insert(_el$159, createComponent(Show, {
+                insert(_el$158, createComponent(Show, {
                   get when() {
                     return tagEditing() === topic().id;
                   },
                   get fallback() {
                     return (() => {
-                      var _el$186 = _tmpl$52();
-                      _el$186.$$click = startTag;
-                      createRenderEffect(() => _el$186.disabled = Boolean(tagOperations()[topic().id]) || !isConfigured);
-                      return _el$186;
+                      var _el$185 = _tmpl$52();
+                      _el$185.$$click = startTag;
+                      createRenderEffect(() => _el$185.disabled = Boolean(tagOperations()[topic().id]) || !isConfigured);
+                      return _el$185;
                     })();
                   },
                   get children() {
-                    var _el$160 = _tmpl$45(),
-                      _el$161 = _el$160.firstChild,
+                    var _el$159 = _tmpl$45(),
+                      _el$160 = _el$159.firstChild,
+                      _el$161 = _el$160.nextSibling,
                       _el$162 = _el$161.nextSibling,
-                      _el$163 = _el$162.nextSibling,
-                      _el$164 = _el$163.nextSibling;
-                    _el$160.$$keydown = event => {
+                      _el$163 = _el$162.nextSibling;
+                    _el$159.$$keydown = event => {
                       if (event.key === 'Escape') {
                         event.preventDefault();
                         setTagEditing(null);
                       }
                     };
-                    _el$160.addEventListener("submit", event => {
+                    _el$159.addEventListener("submit", event => {
                       event.preventDefault();
                       changeTag(topic().id, tagDrafts()[topic().id] || '', 'add');
                     });
-                    _el$161.$$input = event => setTagDrafts(previous => ({
+                    _el$160.$$input = event => setTagDrafts(previous => ({
                       ...previous,
                       [topic().id]: event.currentTarget.value
                     }));
-                    use(element => requestAnimationFrame(() => element.focus()), _el$161);
-                    insert(_el$162, createComponent(For, {
+                    use(element => requestAnimationFrame(() => element.focus()), _el$160);
+                    insert(_el$161, createComponent(For, {
                       get each() {
                         return knownTags().filter(tag => !topic().tags.some(entry => entry.name.toLowerCase() === tag.name.toLowerCase()));
                       },
                       children: tag => (() => {
-                        var _el$187 = _tmpl$8();
-                        createRenderEffect(() => _el$187.value = tag.name);
-                        return _el$187;
+                        var _el$186 = _tmpl$8();
+                        createRenderEffect(() => _el$186.value = tag.name);
+                        return _el$186;
                       })()
                     }));
-                    _el$164.$$click = () => setTagEditing(null);
-                    createRenderEffect(() => _el$163.disabled = !(tagDrafts()[topic().id] || '').trim());
-                    createRenderEffect(() => _el$161.value = tagDrafts()[topic().id] || '');
-                    return _el$160;
+                    _el$163.$$click = () => setTagEditing(null);
+                    createRenderEffect(() => _el$162.disabled = !(tagDrafts()[topic().id] || '').trim());
+                    createRenderEffect(() => _el$160.value = tagDrafts()[topic().id] || '');
+                    return _el$159;
                   }
                 }), null);
                 insert(_el$137, createComponent(Show, {
@@ -7307,139 +7515,136 @@ function Workspace(props) {
                   },
                   get children() {
                     return [(() => {
-                      var _el$165 = _tmpl$46();
+                      var _el$164 = _tmpl$46();
                       var _ref$6 = messageList;
-                      typeof _ref$6 === "function" ? use(_ref$6, _el$165) : messageList = _el$165;
-                      insert(_el$165, createComponent(For, {
+                      typeof _ref$6 === "function" ? use(_ref$6, _el$164) : messageList = _el$164;
+                      insert(_el$164, createComponent(For, {
                         get each() {
                           return currentMessages();
                         },
                         children: message => (() => {
-                          var _el$188 = _tmpl$54(),
-                            _el$189 = _el$188.firstChild,
-                            _el$190 = _el$189.nextSibling,
+                          var _el$187 = _tmpl$54(),
+                            _el$188 = _el$187.firstChild,
+                            _el$189 = _el$188.nextSibling,
+                            _el$190 = _el$189.firstChild,
                             _el$191 = _el$190.firstChild,
-                            _el$192 = _el$191.firstChild,
-                            _el$193 = _el$192.nextSibling,
-                            _el$196 = _el$191.nextSibling,
-                            _el$197 = _el$196.firstChild,
-                            _el$198 = _el$197.nextSibling;
-                          insert(_el$189, () => (message.sender || message.author).slice(0, 1));
-                          insert(_el$192, () => message.sender || message.author);
-                          insert(_el$193, () => formatTime(message.time));
-                          insert(_el$190, createComponent(Show, {
+                            _el$192 = _el$191.nextSibling,
+                            _el$195 = _el$190.nextSibling,
+                            _el$196 = _el$195.firstChild,
+                            _el$197 = _el$196.nextSibling;
+                          insert(_el$188, () => (message.sender || message.author).slice(0, 1));
+                          insert(_el$191, () => message.sender || message.author);
+                          insert(_el$192, () => formatTime(message.time));
+                          insert(_el$189, createComponent(Show, {
                             get when() {
                               return message.replyTo;
                             },
                             get children() {
-                              var _el$194 = _tmpl$53();
-                                _el$194.firstChild;
-                              insert(_el$194, () => message.replyTo.author, null);
-                              createRenderEffect(() => setAttribute(_el$194, "href", message.replyTo.url));
-                              return _el$194;
+                              var _el$193 = _tmpl$53();
+                                _el$193.firstChild;
+                              insert(_el$193, () => message.replyTo.author, null);
+                              createRenderEffect(() => setAttribute(_el$193, "href", message.replyTo.url));
+                              return _el$193;
                             }
-                          }), _el$196);
-                          insert(_el$190, createComponent(MessageText, {
+                          }), _el$195);
+                          insert(_el$189, createComponent(MessageText, {
                             get text() {
                               return message.text;
                             }
-                          }), _el$196);
-                          insert(_el$196, createComponent(For, {
+                          }), _el$195);
+                          insert(_el$195, createComponent(For, {
                             get each() {
                               return message.reactions;
                             },
                             children: type => (() => {
-                              var _el$199 = _tmpl$55();
-                              insert(_el$199, () => reactionSymbols[type][0]);
+                              var _el$198 = _tmpl$55();
+                              insert(_el$198, () => reactionSymbols[type][0]);
                               createRenderEffect(_p$ => {
-                                var _v$78 = reactionSymbols[type][1],
-                                  _v$79 = reactionSymbols[type][1];
-                                _v$78 !== _p$.e && setAttribute(_el$199, "aria-label", _p$.e = _v$78);
-                                _v$79 !== _p$.t && setAttribute(_el$199, "title", _p$.t = _v$79);
+                                var _v$77 = reactionSymbols[type][1],
+                                  _v$78 = reactionSymbols[type][1];
+                                _v$77 !== _p$.e && setAttribute(_el$198, "aria-label", _p$.e = _v$77);
+                                _v$78 !== _p$.t && setAttribute(_el$198, "title", _p$.t = _v$78);
                                 return _p$;
                               }, {
                                 e: undefined,
                                 t: undefined
                               });
-                              return _el$199;
+                              return _el$198;
                             })()
-                          }), _el$197);
-                          _el$197.$$click = () => openReactions(message.id);
-                          _el$198.$$click = () => replyTo(message);
+                          }), _el$196);
+                          _el$196.$$click = () => openReactions(message.id);
+                          _el$197.$$click = () => replyTo(message);
                           createRenderEffect(_p$ => {
-                            var _v$75 = !!(message.author === 'You'),
-                              _v$76 = message.sender ? `Declared sender: ${message.sender} · GitHub author: ${message.author}` : message.author,
-                              _v$77 = message.time.toISOString();
-                            _v$75 !== _p$.e && _el$189.classList.toggle("avatar-you", _p$.e = _v$75);
-                            _v$76 !== _p$.t && setAttribute(_el$192, "title", _p$.t = _v$76);
-                            _v$77 !== _p$.a && setAttribute(_el$193, "datetime", _p$.a = _v$77);
+                            var _v$74 = !!(message.author === 'You'),
+                              _v$75 = message.sender ? `Declared sender: ${message.sender} · GitHub author: ${message.author}` : message.author,
+                              _v$76 = message.time.toISOString();
+                            _v$74 !== _p$.e && _el$188.classList.toggle("avatar-you", _p$.e = _v$74);
+                            _v$75 !== _p$.t && setAttribute(_el$191, "title", _p$.t = _v$75);
+                            _v$76 !== _p$.a && setAttribute(_el$192, "datetime", _p$.a = _v$76);
                             return _p$;
                           }, {
                             e: undefined,
                             t: undefined,
                             a: undefined
                           });
-                          return _el$188;
+                          return _el$187;
                         })()
                       }), null);
-                      insert(_el$165, createComponent(Show, {
+                      insert(_el$164, createComponent(Show, {
                         get when() {
                           return outgoing();
                         },
                         children: entry => (() => {
-                          var _el$200 = _tmpl$56(),
-                            _el$201 = _el$200.firstChild,
-                            _el$202 = _el$201.nextSibling,
+                          var _el$199 = _tmpl$56(),
+                            _el$200 = _el$199.firstChild,
+                            _el$201 = _el$200.nextSibling,
+                            _el$202 = _el$201.firstChild,
                             _el$203 = _el$202.firstChild,
-                            _el$204 = _el$203.firstChild,
-                            _el$205 = _el$204.nextSibling;
-                          insert(_el$205, () => entry().state === 'pending' ? 'Sending…' : 'Delivery unconfirmed — check GitHub before resending');
-                          insert(_el$202, createComponent(MessageText, {
+                            _el$204 = _el$203.nextSibling;
+                          insert(_el$204, () => entry().state === 'pending' ? 'Sending…' : 'Delivery unconfirmed — check GitHub before resending');
+                          insert(_el$201, createComponent(MessageText, {
                             get text() {
                               return entry().text;
                             }
                           }), null);
-                          createRenderEffect(() => setAttribute(_el$200, "aria-busy", entry().state === 'pending'));
-                          return _el$200;
+                          createRenderEffect(() => setAttribute(_el$199, "aria-busy", entry().state === 'pending'));
+                          return _el$199;
                         })()
                       }), null);
-                      return _el$165;
+                      return _el$164;
                     })(), (() => {
-                      var _el$166 = _tmpl$47(),
+                      var _el$165 = _tmpl$47(),
+                        _el$166 = _el$165.firstChild,
                         _el$167 = _el$166.firstChild,
-                        _el$168 = _el$167.firstChild,
-                        _el$169 = _el$168.nextSibling,
-                        _el$170 = _el$167.nextSibling,
-                        _el$171 = _el$170.firstChild,
-                        _el$172 = _el$171.nextSibling,
-                        _el$173 = _el$172.firstChild;
-                      _el$166.addEventListener("submit", sendMessage);
-                      _el$168.$$keydown = event => {
+                        _el$168 = _el$167.nextSibling,
+                        _el$169 = _el$166.nextSibling,
+                        _el$170 = _el$169.firstChild,
+                        _el$171 = _el$170.nextSibling,
+                        _el$172 = _el$171.firstChild;
+                      _el$165.addEventListener("submit", sendMessage);
+                      _el$167.$$keydown = event => {
                         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) sendMessage(event);
                       };
-                      _el$168.$$input = event => setDrafts(previous => ({
+                      _el$167.$$input = event => setDrafts(previous => ({
                         ...previous,
                         [activeId()]: event.currentTarget.value
                       }));
                       var _ref$7 = composerInput;
-                      typeof _ref$7 === "function" ? use(_ref$7, _el$168) : composerInput = _el$168;
-                      insert(_el$172, GITHUB_OWNER, _el$173);
-                      insert(_el$172, GITHUB_REPO, null);
+                      typeof _ref$7 === "function" ? use(_ref$7, _el$167) : composerInput = _el$167;
+                      insert(_el$171, GITHUB_OWNER, _el$172);
+                      insert(_el$171, GITHUB_REPO, null);
                       createRenderEffect(_p$ => {
                         var _v$60 = `Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`,
-                          _v$61 = `Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`,
-                          _v$62 = Boolean(outgoing());
-                        _v$60 !== _p$.e && setAttribute(_el$168, "aria-label", _p$.e = _v$60);
-                        _v$61 !== _p$.t && setAttribute(_el$168, "placeholder", _p$.t = _v$61);
-                        _v$62 !== _p$.a && (_el$169.disabled = _p$.a = _v$62);
+                          _v$61 = Boolean(outgoing());
+                        _v$60 !== _p$.e && setAttribute(_el$167, "aria-label", _p$.e = _v$60);
+                        _v$61 !== _p$.t && (_el$168.disabled = _p$.t = _v$61);
                         return _p$;
                       }, {
                         e: undefined,
-                        t: undefined,
-                        a: undefined
+                        t: undefined
                       });
-                      createRenderEffect(() => _el$168.value = draft());
-                      return _el$166;
+                      createRenderEffect(() => _el$167.value = draft());
+                      return _el$165;
                     })()];
                   }
                 }), null);
@@ -7460,6 +7665,8 @@ function Workspace(props) {
                     onUpdated: updated => rememberChange({
                       ...updated,
                       parentId: topics().find(item => item.id === updated.id)?.parentId ?? null
+                    }, {
+                      dimSidebar: false
                     })
                   })
                 }), null);
@@ -7480,20 +7687,22 @@ function Workspace(props) {
                     onUpdated: updated => rememberChange({
                       ...updated,
                       parentId: topics().find(item => item.id === updated.id)?.parentId ?? null
+                    }, {
+                      dimSidebar: false
                     })
                   })
                 }), null);
                 createRenderEffect(_p$ => {
-                  var _v$63 = `${topic().name} ${['note', 'list'].includes(topic().kind) ? topic().kind : 'chat'}`,
-                    _v$64 = topic().url,
-                    _v$65 = !!(topic().state === 'closed'),
-                    _v$66 = Boolean(closing()[topic().id]),
-                    _v$67 = `${topic().state === 'open' ? 'Open' : 'Closed'} topic: ${topic().state === 'open' ? 'close' : 'reopen'} ${topic().name}`;
-                  _v$63 !== _p$.e && setAttribute(_el$137, "aria-label", _p$.e = _v$63);
-                  _v$64 !== _p$.t && setAttribute(_el$143, "href", _p$.t = _v$64);
-                  _v$65 !== _p$.a && _el$157.classList.toggle("is-closed", _p$.a = _v$65);
-                  _v$66 !== _p$.o && (_el$157.disabled = _p$.o = _v$66);
-                  _v$67 !== _p$.i && setAttribute(_el$157, "aria-label", _p$.i = _v$67);
+                  var _v$62 = `${topic().name} ${['note', 'list'].includes(topic().kind) ? topic().kind : 'chat'}`,
+                    _v$63 = topic().url,
+                    _v$64 = !!(topic().state === 'closed'),
+                    _v$65 = Boolean(closing()[topic().id]),
+                    _v$66 = `${topic().state === 'open' ? 'Open' : 'Closed'} topic: ${topic().state === 'open' ? 'close' : 'reopen'} ${topic().name}`;
+                  _v$62 !== _p$.e && setAttribute(_el$137, "aria-label", _p$.e = _v$62);
+                  _v$63 !== _p$.t && setAttribute(_el$142, "href", _p$.t = _v$63);
+                  _v$64 !== _p$.a && _el$156.classList.toggle("is-closed", _p$.a = _v$64);
+                  _v$65 !== _p$.o && (_el$156.disabled = _p$.o = _v$65);
+                  _v$66 !== _p$.i && setAttribute(_el$156, "aria-label", _p$.i = _v$66);
                   return _p$;
                 }, {
                   e: undefined,
@@ -7522,6 +7731,8 @@ function Workspace(props) {
         onTopicUpdated: updated => rememberChange({
           ...updated,
           parentId: topics().find(topic => topic.id === updated.id)?.parentId ?? null
+        }, {
+          dimSidebar: false
         })
       })
     }), _el$94);
@@ -7568,42 +7779,42 @@ function Workspace(props) {
         return statusChange();
       },
       children: change => (() => {
-        var _el$206 = _tmpl$57(),
-          _el$207 = _el$206.firstChild,
-          _el$209 = _el$207.nextSibling,
-          _el$210 = _el$209.firstChild,
-          _el$211 = _el$210.nextSibling;
-        _el$206.addEventListener("submit", confirmStatusChange);
-        insert(_el$207, () => change().target === 'closed' ? 'Close this topic?' : 'Reopen this topic?');
-        insert(_el$206, createComponent(Show, {
+        var _el$205 = _tmpl$57(),
+          _el$206 = _el$205.firstChild,
+          _el$208 = _el$206.nextSibling,
+          _el$209 = _el$208.firstChild,
+          _el$210 = _el$209.nextSibling;
+        _el$205.addEventListener("submit", confirmStatusChange);
+        insert(_el$206, () => change().target === 'closed' ? 'Close this topic?' : 'Reopen this topic?');
+        insert(_el$205, createComponent(Show, {
           get when() {
             return statusError();
           },
           get children() {
-            var _el$208 = _tmpl$27();
-            insert(_el$208, statusError);
-            return _el$208;
+            var _el$207 = _tmpl$27();
+            insert(_el$207, statusError);
+            return _el$207;
           }
-        }), _el$209);
-        _el$210.$$click = () => statusDialog.close();
-        insert(_el$211, (() => {
+        }), _el$208);
+        _el$209.$$click = () => statusDialog.close();
+        insert(_el$210, (() => {
           var _c$3 = memo(() => !!statusPending());
           return () => _c$3() ? statusLabel(change().id) : change().target === 'closed' ? 'Close topic' : 'Reopen topic';
         })());
         createRenderEffect(_p$ => {
-          var _v$80 = statusPending(),
-            _v$81 = statusPending(),
-            _v$82 = Boolean(closing()[change().id]);
-          _v$80 !== _p$.e && setAttribute(_el$206, "aria-busy", _p$.e = _v$80);
-          _v$81 !== _p$.t && (_el$210.disabled = _p$.t = _v$81);
-          _v$82 !== _p$.a && (_el$211.disabled = _p$.a = _v$82);
+          var _v$79 = statusPending(),
+            _v$80 = statusPending(),
+            _v$81 = Boolean(closing()[change().id]);
+          _v$79 !== _p$.e && setAttribute(_el$205, "aria-busy", _p$.e = _v$79);
+          _v$80 !== _p$.t && (_el$209.disabled = _p$.t = _v$80);
+          _v$81 !== _p$.a && (_el$210.disabled = _p$.a = _v$81);
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$206;
+        return _el$205;
       })()
     }));
     _el$108.addEventListener("close", () => {
@@ -7623,20 +7834,20 @@ function Workspace(props) {
         return Object.keys(reactionSymbols);
       },
       children: type => (() => {
-        var _el$212 = _tmpl$58();
-        _el$212.$$click = () => toggleReaction(type);
-        insert(_el$212, () => reactionSymbols[type][0]);
+        var _el$211 = _tmpl$58();
+        _el$211.$$click = () => toggleReaction(type);
+        insert(_el$211, () => reactionSymbols[type][0]);
         createRenderEffect(_p$ => {
-          var _v$83 = !!Boolean(ownReaction(type)),
-            _v$84 = Boolean(ownReaction(type)),
+          var _v$82 = !!Boolean(ownReaction(type)),
+            _v$83 = Boolean(ownReaction(type)),
+            _v$84 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
             _v$85 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
-            _v$86 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
-            _v$87 = reactionLoading() || reactionBusy() || !reactionViewer();
-          _v$83 !== _p$.e && _el$212.classList.toggle("is-selected", _p$.e = _v$83);
-          _v$84 !== _p$.t && setAttribute(_el$212, "aria-pressed", _p$.t = _v$84);
-          _v$85 !== _p$.a && setAttribute(_el$212, "aria-label", _p$.a = _v$85);
-          _v$86 !== _p$.o && setAttribute(_el$212, "title", _p$.o = _v$86);
-          _v$87 !== _p$.i && (_el$212.disabled = _p$.i = _v$87);
+            _v$86 = reactionLoading() || reactionBusy() || !reactionViewer();
+          _v$82 !== _p$.e && _el$211.classList.toggle("is-selected", _p$.e = _v$82);
+          _v$83 !== _p$.t && setAttribute(_el$211, "aria-pressed", _p$.t = _v$83);
+          _v$84 !== _p$.a && setAttribute(_el$211, "aria-label", _p$.a = _v$84);
+          _v$85 !== _p$.o && setAttribute(_el$211, "title", _p$.o = _v$85);
+          _v$86 !== _p$.i && (_el$211.disabled = _p$.i = _v$86);
           return _p$;
         }, {
           e: undefined,
@@ -7645,7 +7856,7 @@ function Workspace(props) {
           o: undefined,
           i: undefined
         });
-        return _el$212;
+        return _el$211;
       })()
     }));
     insert(_el$108, createComponent(Show, {
@@ -7686,74 +7897,74 @@ function Workspace(props) {
         return removeTarget();
       },
       children: item => (() => {
-        var _el$213 = _tmpl$61(),
-          _el$214 = _el$213.firstChild,
-          _el$217 = _el$214.nextSibling;
-        insert(_el$214, (() => {
+        var _el$212 = _tmpl$61(),
+          _el$213 = _el$212.firstChild,
+          _el$216 = _el$213.nextSibling;
+        insert(_el$213, (() => {
           var _c$4 = memo(() => !!confirmDelete());
           return () => _c$4() ? 'Permanently Delete?' : `Remove ${item().name}`;
         })());
-        insert(_el$213, createComponent(Show, {
+        insert(_el$212, createComponent(Show, {
           get when() {
             return removeError();
           },
           get children() {
-            var _el$215 = _tmpl$27();
-            insert(_el$215, removeError);
-            return _el$215;
+            var _el$214 = _tmpl$27();
+            insert(_el$214, removeError);
+            return _el$214;
           }
-        }), _el$217);
-        insert(_el$213, createComponent(Show, {
+        }), _el$216);
+        insert(_el$212, createComponent(Show, {
           get when() {
             return removalPending();
           },
           get children() {
-            var _el$216 = _tmpl$28();
-            insert(_el$216, () => statusLabel(item().id));
-            return _el$216;
+            var _el$215 = _tmpl$28();
+            insert(_el$215, () => statusLabel(item().id));
+            return _el$215;
           }
-        }), _el$217);
-        insert(_el$217, createComponent(Show, {
+        }), _el$216);
+        insert(_el$216, createComponent(Show, {
           get when() {
             return confirmDelete();
           },
           get fallback() {
             return [(() => {
-              var _el$220 = _tmpl$62();
-              _el$220.$$click = () => confirmRemoval('archived');
+              var _el$219 = _tmpl$62();
+              _el$219.$$click = () => confirmRemoval('archived');
+              createRenderEffect(() => _el$219.disabled = Boolean(closing()[item().id]));
+              return _el$219;
+            })(), (() => {
+              var _el$220 = _tmpl$63();
+              _el$220.$$click = () => setConfirmDelete(true);
               createRenderEffect(() => _el$220.disabled = Boolean(closing()[item().id]));
               return _el$220;
             })(), (() => {
-              var _el$221 = _tmpl$63();
-              _el$221.$$click = () => setConfirmDelete(true);
-              createRenderEffect(() => _el$221.disabled = Boolean(closing()[item().id]));
+              var _el$221 = _tmpl$64();
+              _el$221.$$click = () => removeDialog.close();
+              createRenderEffect(() => _el$221.disabled = removalPending());
               return _el$221;
-            })(), (() => {
-              var _el$222 = _tmpl$64();
-              _el$222.$$click = () => removeDialog.close();
-              createRenderEffect(() => _el$222.disabled = removalPending());
-              return _el$222;
             })()];
           },
           get children() {
             return [(() => {
-              var _el$218 = _tmpl$59();
-              _el$218.$$click = () => confirmRemoval('deleted');
-              createRenderEffect(() => _el$218.disabled = Boolean(closing()[item().id]));
-              return _el$218;
+              var _el$217 = _tmpl$59();
+              _el$217.$$click = () => confirmRemoval('deleted');
+              createRenderEffect(() => _el$217.disabled = Boolean(closing()[item().id]));
+              return _el$217;
             })(), (() => {
-              var _el$219 = _tmpl$60();
-              _el$219.$$click = () => {
+              var _el$218 = _tmpl$60();
+              _el$218.$$click = () => {
                 setConfirmDelete(false);
                 setRemoveError('');
               };
-              createRenderEffect(() => _el$219.disabled = removalPending());
-              return _el$219;
+              createRenderEffect(() => _el$218.disabled = removalPending());
+              return _el$218;
             })()];
           }
         }));
-        createRenderEffect(() => setAttribute(_el$213, "aria-busy", removalPending()));
-        return _el$213;
+        createRenderEffect(() => setAttribute(_el$212, "aria-busy", removalPending()));
+        return _el$212;
       })()
     }));
     createRenderEffect(_p$ => {

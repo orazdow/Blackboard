@@ -4,6 +4,7 @@ import { createCredentialStore } from './credentials.js';
 import ProjectBoard from './project-ui.js';
 import NoteView from './note-ui.js';
 import ListView from './list-ui.js';
+import TalkDescription from './talk-description.js';
 import RepositorySelector from './repository-ui.js';
 import { normalizeRecentRepositories, parseRepository, recentRepositoriesAfterConnect, repositoryKey, repositoryName } from './repository-state.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
@@ -236,8 +237,9 @@ function Workspace(props) {
   const [projectWriting, setProjectWriting] = createSignal(false);
   const [noteWriting, setNoteWriting] = createSignal(false);
   const [listWriting, setListWriting] = createSignal(false);
+  const [talkWriting, setTalkWriting] = createSignal(false);
   const switchingDisabled = () => creating() || milestoneSaving() || milestoneStateBusy() || reactionBusy() || projectWriting()
-    || noteWriting() || listWriting()
+    || noteWriting() || listWriting() || talkWriting()
     || Object.values(assignmentBusy()).some(Boolean)
     || Object.values(closing()).some((change) => change?.status === 'pending')
     || Object.values(tagOperations()).some((operation) => operation?.status === 'pending')
@@ -498,7 +500,7 @@ function Workspace(props) {
     }
     try {
       const tags = await (target === 'add' ? api.addChannelTag(id, name) : api.removeChannelTag(id, name));
-      rememberChange({ id, tags });
+      rememberChange({ id, tags }, { dimSidebar: false });
       setKnownTags((previous) => [...new Map([...previous, ...tags].map((tag) => [tag.name.toLowerCase(), tag])).values()]);
       setTagOperations((previous) => ({ ...previous, [id]: null }));
       refresh();
@@ -565,7 +567,7 @@ function Workspace(props) {
     setAssignmentBusy((previous) => ({ ...previous, [id]: true }));
     try {
       const updated = await api.setChannelMilestone(id, milestoneId);
-      rememberChange({ ...updated, parentId: topics().find((item) => item.id === id)?.parentId ?? null });
+      rememberChange({ ...updated, parentId: topics().find((item) => item.id === id)?.parentId ?? null }, { dimSidebar: false });
       refresh();
     } catch (failure) { setError(failure.message); }
     finally { setAssignmentBusy((previous) => ({ ...previous, [id]: false })); }
@@ -738,9 +740,9 @@ function Workspace(props) {
     });
   }
 
-  function rememberChange(change) {
+  function rememberChange(change, { dimSidebar = true } = {}) {
     const previous = topics().find((item) => item.id === change.id);
-    const updated = topicTracker.remember({ ...previous, ...change, parentId: change.parentId === undefined ? previous?.parentId ?? null : change.parentId });
+    const updated = topicTracker.remember({ ...previous, ...change, dimSidebar, parentId: change.parentId === undefined ? previous?.parentId ?? null : change.parentId });
     channelRevision += 1;
     setTopics((items) => items.map((item) => item.id === updated.id ? updated : item).filter((item) => !item.archived));
     if (updated.kind === 'list') setGoalLists((items) => [...items.filter((item) => item.id !== updated.id), updated]);
@@ -939,7 +941,7 @@ function Workspace(props) {
         </div>
         <nav class="channel-list" aria-label="Topics">
           <For each={visibleTopics()}>{(item) => (
-            <div class="channel-row" style={{ 'margin-left': `${Math.min(item.depth, 5) * 16}px` }} classList={{ 'is-active': activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) || item.syncState === 'confirming' }} aria-busy={closing()[item.id]?.status === 'pending' || item.syncState === 'confirming'}>
+            <div class="channel-row" style={{ 'margin-left': `${Math.min(item.depth, 5) * 16}px` }} classList={{ 'is-active': activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id, 'is-pending': Boolean(closing()[item.id]) || item.syncState === 'confirming' && item.dimSidebar !== false }} aria-busy={closing()[item.id]?.status === 'pending' || item.syncState === 'confirming'}>
             <Show when={item.hasChildren} fallback={<span class="topic-expand" aria-hidden="true" />}>
               <button type="button" class="topic-expand" aria-label={`${collapsedTopics().has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`} aria-expanded={!collapsedTopics().has(item.id)} onClick={() => toggleTopic(item.id)}>{collapsedTopics().has(item.id) ? '›' : '⌄'}</button>
             </Show>
@@ -1026,12 +1028,17 @@ function Workspace(props) {
       }>
       <section class="chat-panel" aria-label={`${topic().name} ${['note', 'list'].includes(topic().kind) ? topic().kind : 'chat'}`}>
         <header class="chat-header">
-          <h2><TopicMarker kind={topic().kind} /> {topic().name}</h2>
-          <Show when={!['note', 'list'].includes(topic().kind)}><p class="muted">{topic().description}</p></Show>
+          <h2>{topic().name}</h2>
+          <Show when={topic().kind === 'discussion'}><p class="muted">{topic().description}</p></Show>
           <div class="chat-header-actions">
             <a class="preview-badge" href={topic().url} target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
         </header>
+
+        <Show when={topic().kind === 'talk' ? topic().id : null} keyed>{() =>
+          <TalkDescription topic={topic()} api={api} onBusyChange={setTalkWriting}
+            onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
+        }</Show>
 
         <Show when={error()}>
           <div class="api-error" role="alert">{error()} <button type="button" onClick={() => setError('')} aria-label="Dismiss error">×</button></div>
@@ -1132,7 +1139,7 @@ function Workspace(props) {
             <textarea
               ref={composerInput}
               aria-label={`Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`}
-              placeholder={`Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`}
+              placeholder="send message"
               rows="2"
               value={draft()}
               onInput={(event) => setDrafts((previous) => ({ ...previous, [activeId()]: event.currentTarget.value }))}
@@ -1147,17 +1154,17 @@ function Workspace(props) {
         </Show>
         <Show when={topic().kind === 'note' ? topic().id : null} keyed>{() =>
           <NoteView topic={topic()} api={api} draftKey={`blackboard:${workspaceKey}:note:${topic().id}:draft`} onBusyChange={setNoteWriting}
-            onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null })} />
+            onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>
         <Show when={topic().kind === 'list' ? topic().id : null} keyed>{() =>
           <ListView topic={topic()} api={api} draftKey={`blackboard:${workspaceKey}:list:${topic().id}:draft`} onBusyChange={setListWriting}
-            onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null })} />
+            onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>
       </section>
       </Show>
       </Show>
       }>{(id) => <ProjectBoard onBusyChange={setProjectWriting} api={api} projectId={id} projectName={projects().find((item) => item.id === id)?.name} topics={topics().filter((item) => item.kind !== 'discussion')} onOpenTopic={(topicId) => selectTopic(topicId, id)}
-        onTopicUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((topic) => topic.id === updated.id)?.parentId ?? null })} />}</Show>
+        onTopicUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((topic) => topic.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />}</Show>
       <dialog ref={milestoneDialog} class="topic-status-dialog milestone-dialog" aria-labelledby="milestone-form-title"
         onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, milestoneSaving())}
         onCancel={(event) => { if (milestoneSaving()) event.preventDefault(); }}>

@@ -32,6 +32,18 @@ export default {
       exclude: 'node_modules/**',
       presets: ['babel-preset-solid'],
     }),
+    ...(!pages ? [{
+      name: 'local-reload-client',
+      banner() {
+        return `if (typeof document !== 'undefined' && ['localhost', '127.0.0.1'].includes(location.hostname) && !document.getElementById('livereloadscript')) {
+          const script = document.createElement('script');
+          script.id = 'livereloadscript';
+          script.async = true;
+          script.src = 'http://' + location.hostname + ':35729/livereload.js?snipver=1';
+          document.head.appendChild(script);
+        }`;
+      },
+    }] : []),
     ...(pages ? [{
       name: 'pages-assets',
       generateBundle() {
@@ -56,6 +68,7 @@ export default {
           }),
           livereload({
             watch: 'dist',
+            inject: false,
             usePolling: true,
             applyCSSLive: false,
             delay: 200,
