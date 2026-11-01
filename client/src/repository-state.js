@@ -55,3 +55,10 @@ export function repositoryFromPagesUrl(value) {
     return repositoryName(parseRepository(`${owner}/${repo}`));
   } catch { return null; }
 }
+
+export function defaultRepositoryForUrl(value, configured = '') {
+  if (configured) return configured;
+  const pagesRepository = repositoryFromPagesUrl(value);
+  if (pagesRepository?.toLowerCase() === 'orazdow/blackboard') return null;
+  return pagesRepository || 'orazdow/Blackboard';
+}

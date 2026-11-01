@@ -2279,6 +2279,12 @@ function repositoryFromPagesUrl(value) {
     return null;
   }
 }
+function defaultRepositoryForUrl(value, configured = '') {
+  if (configured) return configured;
+  const pagesRepository = repositoryFromPagesUrl(value);
+  if (pagesRepository?.toLowerCase() === 'orazdow/blackboard') return null;
+  return pagesRepository || 'orazdow/Blackboard';
+}
 
 const keyFor = repository => `blackboard:${repositoryKey(repository)}:credentials`;
 function normalizeCredentials(value) {
@@ -2467,7 +2473,7 @@ var _tmpl$$4 = /*#__PURE__*/template(`<details class=project-menu><summary></sum
   _tmpl$9$3 = /*#__PURE__*/template(`<button type=button>`),
   _tmpl$0$3 = /*#__PURE__*/template(`<a target=_blank rel="noopener noreferrer">Open in GitHub ↗`),
   _tmpl$1$3 = /*#__PURE__*/template(`<a class=preview-badge target=_blank rel="noopener noreferrer">GitHub ↗`),
-  _tmpl$10$2 = /*#__PURE__*/template(`<div class=api-error role=alert> <button type=button aria-label="Dismiss project error">×`),
+  _tmpl$10$3 = /*#__PURE__*/template(`<div class=api-error role=alert> <button type=button aria-label="Dismiss project error">×`),
   _tmpl$11$2 = /*#__PURE__*/template(`<button type=button>+ Table`),
   _tmpl$12$2 = /*#__PURE__*/template(`<button type=button>+ Board`),
   _tmpl$13$1 = /*#__PURE__*/template(`<nav class=project-views aria-label="Project views">`),
@@ -3238,7 +3244,7 @@ function ProjectBoard(props) {
         return error();
       },
       get children() {
-        var _el$20 = _tmpl$10$2(),
+        var _el$20 = _tmpl$10$3(),
           _el$21 = _el$20.firstChild,
           _el$22 = _el$21.nextSibling;
         insert(_el$20, error, _el$21);
@@ -4298,7 +4304,7 @@ var _tmpl$$2 = /*#__PURE__*/template(`<button type=button>`),
   _tmpl$9$2 = /*#__PURE__*/template(`<p class=muted>No items yet.`),
   _tmpl$0$2 = /*#__PURE__*/template(`<form class=list-item-edit><input type=text aria-label="Edit list item"maxlength=500><button type=submit>Save</button><button type=button>Cancel`),
   _tmpl$1$2 = /*#__PURE__*/template(`<div class=list-item>`),
-  _tmpl$10$1 = /*#__PURE__*/template(`<label><input type=checkbox><span>`),
+  _tmpl$10$2 = /*#__PURE__*/template(`<label><input type=checkbox><span>`),
   _tmpl$11$1 = /*#__PURE__*/template(`<button type=button>Edit`),
   _tmpl$12$1 = /*#__PURE__*/template(`<button type=button>Remove`);
 function ListView(props) {
@@ -4493,7 +4499,7 @@ function ListView(props) {
                     },
                     get fallback() {
                       return [(() => {
-                        var _el$24 = _tmpl$10$1(),
+                        var _el$24 = _tmpl$10$2(),
                           _el$25 = _el$24.firstChild,
                           _el$26 = _el$25.nextSibling;
                         _el$25.addEventListener("change", event => {
@@ -4634,17 +4640,18 @@ function ListView(props) {
 }
 delegateEvents(["click", "input"]);
 
-var _tmpl$$1 = /*#__PURE__*/template(`<div class=repository-recents role=group aria-label="Recent repositories">`),
-  _tmpl$2$1 = /*#__PURE__*/template(`<p class=muted>Connecting...`),
-  _tmpl$3$1 = /*#__PURE__*/template(`<p class=muted>Waiting for the current change to finish.`),
-  _tmpl$4$1 = /*#__PURE__*/template(`<p class=dialog-error role=alert>`),
-  _tmpl$5$1 = /*#__PURE__*/template(`<div id=repository-menu class=repository-menu aria-label="Repository selection"><div class=repository-current><span></span><button type=button class=repository-permit aria-haspopup=dialog></button></div><button type=button class=repository-connect aria-haspopup=dialog>Connect repository`),
-  _tmpl$6$1 = /*#__PURE__*/template(`<label for=permit-project-token>Projects token <span class=muted>(optional)`),
-  _tmpl$7$1 = /*#__PURE__*/template(`<input id=permit-project-token type=password autocomplete=off spellcheck=false>`),
-  _tmpl$8$1 = /*#__PURE__*/template(`<button type=button class=permit-forget>Forget credentials`),
-  _tmpl$9$1 = /*#__PURE__*/template(`<button type=button>Continue without Projects`),
-  _tmpl$0$1 = /*#__PURE__*/template(`<header class="workspace-header repository-header"><button type=button class=repository-trigger aria-controls=repository-menu><img class=workspace-icon src=./lyra.jpg alt><span class=repository-heading><span class=repository-title></span><span class=muted></span></span><svg class=repository-chevron width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg></button><dialog class="topic-status-dialog permit-dialog"aria-labelledby=permit-title><form><h2 id=permit-title></h2><label for=permit-repository>Repository</label><input id=permit-repository type=text required autocomplete=off placeholder="owner/repo or GitHub URL"><label for=permit-token>Repository token</label><input id=permit-token type=password required autocomplete=off spellcheck=false><label class=permit-remember><input type=checkbox> Remember on this browser</label><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit>`),
-  _tmpl$1$1 = /*#__PURE__*/template(`<button type=button>`);
+var _tmpl$$1 = /*#__PURE__*/template(`<div class=repository-current><span></span><button type=button class=repository-permit aria-haspopup=dialog>`),
+  _tmpl$2$1 = /*#__PURE__*/template(`<div class=repository-recents role=group aria-label="Recent repositories">`),
+  _tmpl$3$1 = /*#__PURE__*/template(`<p class=muted>Connecting...`),
+  _tmpl$4$1 = /*#__PURE__*/template(`<p class=muted>Waiting for the current change to finish.`),
+  _tmpl$5$1 = /*#__PURE__*/template(`<p class=dialog-error role=alert>`),
+  _tmpl$6$1 = /*#__PURE__*/template(`<div id=repository-menu class=repository-menu aria-label="Repository selection"><button type=button class=repository-connect aria-haspopup=dialog>Connect repository`),
+  _tmpl$7$1 = /*#__PURE__*/template(`<label for=permit-project-token>Projects token <span class=muted>(optional)`),
+  _tmpl$8$1 = /*#__PURE__*/template(`<input id=permit-project-token type=password autocomplete=off spellcheck=false>`),
+  _tmpl$9$1 = /*#__PURE__*/template(`<button type=button class=permit-forget>Forget credentials`),
+  _tmpl$0$1 = /*#__PURE__*/template(`<button type=button>Continue without Projects`),
+  _tmpl$1$1 = /*#__PURE__*/template(`<header class="workspace-header repository-header"><button type=button class=repository-trigger aria-controls=repository-menu><img class=workspace-icon src=./lyra.jpg alt><span class=repository-heading><span class=repository-title></span><span class=muted></span></span><svg class=repository-chevron width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg></button><dialog class="topic-status-dialog permit-dialog"aria-labelledby=permit-title><form><h2 id=permit-title></h2><label for=permit-repository>Repository</label><input id=permit-repository type=text required autocomplete=off placeholder="owner/repo or GitHub URL"><label for=permit-token>Repository token</label><input id=permit-token type=password required autocomplete=off spellcheck=false><label class=permit-remember><input type=checkbox> Remember on this browser</label><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit>`),
+  _tmpl$10$1 = /*#__PURE__*/template(`<button type=button>`);
 function RepositorySelector(props) {
   const [open, setOpen] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
@@ -4692,8 +4699,8 @@ function RepositorySelector(props) {
     setError('');
     setValidated(null);
     tokensEdited = false;
-    const saved = props.getCredentials(repository);
-    setAddress(connecting ? connectedName : repositoryName(repository));
+    const saved = repository ? props.getCredentials(repository) : null;
+    setAddress(connecting ? connectedName : repository ? repositoryName(repository) : '');
     setToken(saved?.token || (connecting ? props.credentials?.token : '') || '');
     setProjectToken(saved?.projectToken || (props.projectsEnabled && connecting ? props.credentials?.projectToken : '') || '');
     setRemember(saved?.remember ?? true);
@@ -4794,7 +4801,7 @@ function RepositorySelector(props) {
     } catch {/* Address validation runs on Connect. */}
   }
   return (() => {
-    var _el$ = _tmpl$0$1(),
+    var _el$ = _tmpl$1$1(),
       _el$2 = _el$.firstChild,
       _el$3 = _el$2.firstChild,
       _el$4 = _el$3.nextSibling,
@@ -4819,33 +4826,51 @@ function RepositorySelector(props) {
     };
     var _ref$2 = trigger;
     typeof _ref$2 === "function" ? use(_ref$2, _el$2) : trigger = _el$2;
-    insert(_el$5, () => props.repository.repo || 'Connect repository');
-    insert(_el$6, () => props.repository.owner || 'Blackboard');
+    insert(_el$5, () => props.repository?.repo || 'Connect repository');
+    insert(_el$6, () => props.repository?.owner || 'Blackboard');
     insert(_el$, createComponent(Show, {
       get when() {
         return open();
       },
       get children() {
-        var _el$7 = _tmpl$5$1(),
-          _el$8 = _el$7.firstChild,
-          _el$9 = _el$8.firstChild,
-          _el$0 = _el$9.nextSibling,
-          _el$10 = _el$8.nextSibling;
-        insert(_el$9, () => repositoryName(props.repository));
-        _el$0.$$click = () => openPermit();
-        insert(_el$0, () => props.permitted ? 'Permitted' : 'Permit');
+        var _el$7 = _tmpl$6$1(),
+          _el$10 = _el$7.firstChild;
+        insert(_el$7, createComponent(Show, {
+          get when() {
+            return props.repository;
+          },
+          get children() {
+            var _el$8 = _tmpl$$1(),
+              _el$9 = _el$8.firstChild,
+              _el$0 = _el$9.nextSibling;
+            insert(_el$9, () => repositoryName(props.repository));
+            _el$0.$$click = () => openPermit();
+            insert(_el$0, () => props.permitted ? 'Permitted' : 'Permit');
+            createRenderEffect(_p$ => {
+              var _v$ = repositoryName(props.repository),
+                _v$2 = busy() || props.switchDisabled;
+              _v$ !== _p$.e && setAttribute(_el$9, "title", _p$.e = _v$);
+              _v$2 !== _p$.t && (_el$0.disabled = _p$.t = _v$2);
+              return _p$;
+            }, {
+              e: undefined,
+              t: undefined
+            });
+            return _el$8;
+          }
+        }), _el$10);
         insert(_el$7, createComponent(Show, {
           get when() {
             return props.recentRepositories?.length;
           },
           get children() {
-            var _el$1 = _tmpl$$1();
+            var _el$1 = _tmpl$2$1();
             insert(_el$1, createComponent(For, {
               get each() {
                 return props.recentRepositories;
               },
               children: repository => (() => {
-                var _el$31 = _tmpl$1$1();
+                var _el$31 = _tmpl$10$1();
                 _el$31.$$click = () => openPermit(repository, true, repositoryName(repository));
                 insert(_el$31, () => repositoryName(repository));
                 createRenderEffect(() => _el$31.disabled = busy() || props.switchDisabled);
@@ -4861,7 +4886,7 @@ function RepositorySelector(props) {
             return busy();
           },
           get children() {
-            return _tmpl$2$1();
+            return _tmpl$3$1();
           }
         }), null);
         insert(_el$7, createComponent(Show, {
@@ -4869,7 +4894,7 @@ function RepositorySelector(props) {
             return props.switchDisabled;
           },
           get children() {
-            return _tmpl$3$1();
+            return _tmpl$4$1();
           }
         }), null);
         insert(_el$7, createComponent(Show, {
@@ -4877,26 +4902,20 @@ function RepositorySelector(props) {
             return error();
           },
           get children() {
-            var _el$13 = _tmpl$4$1();
+            var _el$13 = _tmpl$5$1();
             insert(_el$13, error);
             return _el$13;
           }
         }), null);
         createRenderEffect(_p$ => {
-          var _v$ = busy(),
-            _v$2 = repositoryName(props.repository),
-            _v$3 = busy() || props.switchDisabled,
+          var _v$3 = busy(),
             _v$4 = busy() || props.switchDisabled;
-          _v$ !== _p$.e && setAttribute(_el$7, "aria-busy", _p$.e = _v$);
-          _v$2 !== _p$.t && setAttribute(_el$9, "title", _p$.t = _v$2);
-          _v$3 !== _p$.a && (_el$0.disabled = _p$.a = _v$3);
-          _v$4 !== _p$.o && (_el$10.disabled = _p$.o = _v$4);
+          _v$3 !== _p$.e && setAttribute(_el$7, "aria-busy", _p$.e = _v$3);
+          _v$4 !== _p$.t && (_el$10.disabled = _p$.t = _v$4);
           return _p$;
         }, {
           e: undefined,
-          t: undefined,
-          a: undefined,
-          o: undefined
+          t: undefined
         });
         return _el$7;
       }
@@ -4929,8 +4948,8 @@ function RepositorySelector(props) {
         return props.projectsEnabled;
       },
       get children() {
-        return [_tmpl$6$1(), (() => {
-          var _el$22 = _tmpl$7$1();
+        return [_tmpl$7$1(), (() => {
+          var _el$22 = _tmpl$8$1();
           _el$22.$$input = event => {
             tokensEdited = true;
             setProjectToken(event.currentTarget.value);
@@ -4948,7 +4967,7 @@ function RepositorySelector(props) {
         return error();
       },
       get children() {
-        var _el$25 = _tmpl$4$1();
+        var _el$25 = _tmpl$5$1();
         insert(_el$25, error);
         return _el$25;
       }
@@ -4958,7 +4977,7 @@ function RepositorySelector(props) {
         return memo(() => mode() === 'permit')() && props.credentials?.token;
       },
       get children() {
-        var _el$26 = _tmpl$8$1();
+        var _el$26 = _tmpl$9$1();
         _el$26.$$click = forget;
         createRenderEffect(() => _el$26.disabled = busy() || props.switchDisabled);
         return _el$26;
@@ -4970,7 +4989,7 @@ function RepositorySelector(props) {
         return validated();
       },
       get children() {
-        var _el$29 = _tmpl$9$1();
+        var _el$29 = _tmpl$0$1();
         _el$29.$$click = withoutProjects;
         createRenderEffect(() => _el$29.disabled = busy() || props.switchDisabled);
         return _el$29;
@@ -4978,8 +4997,8 @@ function RepositorySelector(props) {
     }), _el$30);
     insert(_el$30, () => busy() ? 'Checking...' : 'Connect');
     createRenderEffect(_p$ => {
-      var _v$5 = repositoryName(props.repository),
-        _v$6 = `Repository ${repositoryName(props.repository)}`,
+      var _v$5 = props.repository ? repositoryName(props.repository) : 'Connect repository',
+        _v$6 = props.repository ? `Repository ${repositoryName(props.repository)}` : 'Connect repository',
         _v$7 = open(),
         _v$8 = busy(),
         _v$9 = mode() !== 'connect',
@@ -5181,71 +5200,72 @@ function createMilestoneTracker() {
   };
 }
 
-var _tmpl$ = /*#__PURE__*/template(`<p class=api-error role=alert>`),
-  _tmpl$2 = /*#__PURE__*/template(`<section class="chat-panel empty-chat"><h2></h2><button type=button>Back to topics`),
-  _tmpl$3 = /*#__PURE__*/template(`<div class=api-error role=alert> <button type=button aria-label="Dismiss error">×`),
-  _tmpl$4 = /*#__PURE__*/template(`<p class=milestone-due>Due `),
-  _tmpl$5 = /*#__PURE__*/template(`<div class=milestone-topic-list>`),
-  _tmpl$6 = /*#__PURE__*/template(`<section class="chat-panel milestone-overview"><header class=chat-header><h2></h2><p class=muted>Goal</p><div class=chat-header-actions><a class=preview-badge target=_blank rel="noopener noreferrer">GitHub ↗</a></div></header><div class=milestone-detail><div class=milestone-detail-actions><button type=button class=topic-status><span class=topic-status-dot aria-hidden=true></span></button><button type=button class=milestone-edit-button>Edit</button></div><div class=milestone-progress-label><strong> / <!> complete</strong></div><progress class=milestone-progress max=100></progress><div class=milestone-topics-heading><h3>Tasks</h3><select aria-label="Add task to goal"value><option value>Add task…`),
-  _tmpl$7 = /*#__PURE__*/template(`<option>`),
-  _tmpl$8 = /*#__PURE__*/template(`<p class=muted>No tasks assigned yet.`),
-  _tmpl$9 = /*#__PURE__*/template(`<small>`),
-  _tmpl$0 = /*#__PURE__*/template(`<div class=milestone-topic-row><button type=button class=milestone-topic-link><span class=milestone-task-title><span class=topic-status-dot aria-hidden=true></span></span><small></small></button><button type=button class=milestone-topic-remove title="Remove from goal">−`),
-  _tmpl$1 = /*#__PURE__*/template(`<code>`),
-  _tmpl$10 = /*#__PURE__*/template(`<a target=_blank rel="noopener noreferrer">`),
-  _tmpl$11 = /*#__PURE__*/template(`<a class=message-mention target=_blank rel="noopener noreferrer">`),
-  _tmpl$12 = /*#__PURE__*/template(`<span class=message-mention title="Declared Blackboard identity">`),
-  _tmpl$13 = /*#__PURE__*/template(`<div class=message-text>`),
-  _tmpl$14 = /*#__PURE__*/template(`<blockquote>`),
-  _tmpl$15 = /*#__PURE__*/template(`<div>`),
-  _tmpl$16 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M4 5h3v3H4zM4 11h3v3H4zM4 17h3v3H4zM10 6h10M10 12h10M10 18h10">`),
-  _tmpl$17 = /*#__PURE__*/template(`<span class=channel-hash>`),
-  _tmpl$18 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8">`),
-  _tmpl$19 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M8 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-3 3v-3"></path><path d="M13 7H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2l3 3v-3h3a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z">`),
-  _tmpl$20 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z"></path><path d="M8 9h8M8 13h5">`),
-  _tmpl$21 = /*#__PURE__*/template(`<label><input type=radio name=topicKind value=discussion><span>Discussion`),
-  _tmpl$22 = /*#__PURE__*/template(`<form id=new-topic-form class=new-topic-form><label for=topic-name></label><input id=topic-name name=topicName type=text required maxlength=80><fieldset class=topic-kind-options><legend class=sr-only>Topic type</legend><label><input type=radio name=topicKind value=talk><span>Talk</span></label><label><input type=radio name=topicKind value=list><span>List</span></label><label><input type=radio name=topicKind value=note><span>Note</span></label></fieldset><div class=new-topic-form-actions><button type=button class=cancel-topic-button>Cancel</button><button type=submit>`),
-  _tmpl$23 = /*#__PURE__*/template(`<p class=project-sidebar-error role=alert>`),
-  _tmpl$24 = /*#__PURE__*/template(`<section class=sidebar-section aria-label=Projects><button type=button class=sidebar-section-toggle aria-controls=projects-panel><span class=sidebar-label>Projects</span><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path></path></svg></button><div id=projects-panel class=sidebar-section-panel><nav class=project-list aria-label=Projects>`),
-  _tmpl$25 = /*#__PURE__*/template(`<nav class=milestone-list aria-label=Goals>`),
-  _tmpl$26 = /*#__PURE__*/template(`<p class=dialog-error role=alert>`),
-  _tmpl$27 = /*#__PURE__*/template(`<p role=status>`),
-  _tmpl$28 = /*#__PURE__*/template(`<section class=app-shell><aside class=sidebar aria-label="Chat topics"><div class=sidebar-actions><button type=button class=new-topic-button aria-controls=new-topic-form><span class=new-topic-plus aria-hidden=true>+</span> New topic</button></div><div class=topic-list-heading><div class=sidebar-label>Topics</div><button type=button class=topic-filter aria-label="Filter topics (coming soon)"aria-disabled=true title="Filter topics — coming soon"><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M3 6h4m4 0h10M3 12h10m4 0h4M3 18h2m4 0h12"></path><circle cx=9 cy=6 r=2></circle><circle cx=15 cy=12 r=2></circle><circle cx=7 cy=18 r=2></circle></svg></button></div><nav class=channel-list aria-label=Topics></nav><section class=sidebar-section aria-label=Goals><button type=button class=sidebar-section-toggle aria-controls=milestones-panel><span class=sidebar-label>Goals</span><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path></path></svg></button><div id=milestones-panel class=sidebar-section-panel><div class=milestone-list-actions><button type=button class=new-milestone-button><span aria-hidden=true>+</span> New goal</button></div></div></section><footer class=sidebar-footer><span class=status-dot role=img></span></footer></aside><dialog class="topic-status-dialog milestone-dialog"aria-labelledby=milestone-form-title><form><h2 id=milestone-form-title></h2><label for=milestone-name>Name</label><input id=milestone-name type=text required maxlength=256 autofocus><label for=milestone-description>Description</label><textarea id=milestone-description rows=4></textarea><label for=milestone-date>Due date <span class=muted>(optional)</span></label><input id=milestone-date type=date><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit></button></div></form></dialog><dialog class=topic-status-dialog aria-labelledby=topic-status-title></dialog><dialog class="topic-status-dialog reaction-dialog"aria-labelledby=reaction-title><h2 id=reaction-title>React</h2><div class=reaction-choices></div><div class=dialog-actions><button type=button autofocus>Cancel</button></div></dialog><dialog class=topic-status-dialog aria-labelledby=remove-topic-title>`),
-  _tmpl$29 = /*#__PURE__*/template(`<small class=topic-parent-hint>Under: `),
-  _tmpl$30 = /*#__PURE__*/template(`<button type=button class=topic-expand>`),
-  _tmpl$31 = /*#__PURE__*/template(`<small role=status>`),
-  _tmpl$32 = /*#__PURE__*/template(`<button type=button class=add-subtopic-button title="Create subtopic"><span aria-hidden=true>+`),
-  _tmpl$33 = /*#__PURE__*/template(`<div class=channel-row><button type=button class=channel-button></button><button type=button class=remove-topic-button aria-haspopup=dialog><span aria-hidden=true>−`),
-  _tmpl$34 = /*#__PURE__*/template(`<span class=topic-expand aria-hidden=true>`),
-  _tmpl$35 = /*#__PURE__*/template(`<div class="channel-row is-pending"><span class=topic-expand aria-hidden=true></span><div class=channel-button><small role=status>`),
-  _tmpl$36 = /*#__PURE__*/template(`<small>Closed`),
-  _tmpl$37 = /*#__PURE__*/template(`<button type=button class=project-list-item><span>`),
-  _tmpl$38 = /*#__PURE__*/template(`<p>`),
-  _tmpl$39 = /*#__PURE__*/template(`<button type=button class=milestone-list-item><span class=milestone-list-title></span><progress class=milestone-progress max=100>`),
-  _tmpl$40 = /*#__PURE__*/template(`<p class=muted>`),
-  _tmpl$41 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ Back to project`),
-  _tmpl$42 = /*#__PURE__*/template(`<option>Goal #`),
-  _tmpl$43 = /*#__PURE__*/template(`<label class=topic-milestone-select><span class=sr-only>Goal</span><span class=topic-milestone-value aria-hidden=true></span><svg width=12 height=12 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg><select aria-label="Add to goal"><option value>None`),
-  _tmpl$44 = /*#__PURE__*/template(`<form class=topic-tag-form aria-label="Add topic tag"><input type=text aria-label="Tag name"placeholder="Tag name"list=topic-tag-suggestions maxlength=50 required><datalist id=topic-tag-suggestions></datalist><button type=submit>Add</button><button type=button aria-label="Cancel tag">×`),
-  _tmpl$45 = /*#__PURE__*/template(`<div class=message-list role=log aria-label=Messages aria-live=polite aria-relevant=additions>`),
-  _tmpl$46 = /*#__PURE__*/template(`<form class=composer><div class=composer-box><textarea rows=2></textarea><button type=submit>Send <span aria-hidden=true>↗</span></button></div><p class=composer-hint>Enter to send · Shift + Enter for a new line <span>/`),
-  _tmpl$47 = /*#__PURE__*/template(`<section class=chat-panel><header class=chat-header><h2> </h2><div class=chat-header-actions><a class=preview-badge target=_blank rel=noreferrer>GitHub ↗</a></div></header><div class=chat-topic-controls><button type=button class=topic-status aria-haspopup=dialog><span class=topic-status-dot aria-hidden=true></span></button></div><div class=topic-tags aria-label="Topic tags">`),
-  _tmpl$48 = /*#__PURE__*/template(`<section class="chat-panel empty-chat"><h2></h2><p class=muted></p><button type=button>New topic`),
-  _tmpl$49 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ `),
-  _tmpl$50 = /*#__PURE__*/template(`<span class=topic-tag><span class=topic-tag-dot aria-hidden=true></span><span class=topic-tag-name></span><button type=button>×`),
-  _tmpl$51 = /*#__PURE__*/template(`<button type=button class=add-tag-button>+ Tag`),
-  _tmpl$52 = /*#__PURE__*/template(`<a class=message-reply-reference target=_blank rel="noopener noreferrer">↳ Replying to `),
-  _tmpl$53 = /*#__PURE__*/template(`<article class=message><span class=avatar aria-hidden=true></span><div class=message-content><div class=message-meta><span class=message-author></span><time></time></div><div class=message-reactions role=group aria-label=Reactions><button type=button class=reaction-add aria-label="Add or remove a reaction"aria-haspopup=dialog title=React><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round aria-hidden=true><path d="M21 13a9 9 0 1 1-10-10M8 14c1.8 2 6.2 2 8 0M17 4h6m-3-3v6"></path><path d="M8 9h.01M14 9h.01"stroke-width=3></path></svg></button><button type=button class=message-reply title="Quote reply">Reply`),
-  _tmpl$54 = /*#__PURE__*/template(`<span role=img>`),
-  _tmpl$55 = /*#__PURE__*/template(`<article class="message is-pending"><span class="avatar avatar-you"aria-hidden=true>Y</span><div class=message-content><div class=message-meta><span class=message-author>You</span><span class=delivery-state role=status>`),
-  _tmpl$56 = /*#__PURE__*/template(`<form><h2 id=topic-status-title></h2><div class=dialog-actions><button type=button class=dialog-cancel autofocus>Cancel</button><button type=submit>`),
-  _tmpl$57 = /*#__PURE__*/template(`<button type=button class=reaction-choice>`),
-  _tmpl$58 = /*#__PURE__*/template(`<button type=button>Yes`),
-  _tmpl$59 = /*#__PURE__*/template(`<button type=button>No`),
-  _tmpl$60 = /*#__PURE__*/template(`<div><h2 id=remove-topic-title></h2><div class=dialog-actions>`),
-  _tmpl$61 = /*#__PURE__*/template(`<button type=button>Archive`),
-  _tmpl$62 = /*#__PURE__*/template(`<button type=button>Delete`),
-  _tmpl$63 = /*#__PURE__*/template(`<button type=button autofocus>Cancel`);
+var _tmpl$ = /*#__PURE__*/template(`<section class=app-shell><aside class=sidebar aria-label=Repositories></aside><section class="chat-panel empty-chat"><h2>Connect a repository</h2><p class=muted>Open the repository menu to choose a workspace.`),
+  _tmpl$2 = /*#__PURE__*/template(`<p class=api-error role=alert>`),
+  _tmpl$3 = /*#__PURE__*/template(`<section class="chat-panel empty-chat"><h2></h2><button type=button>Back to topics`),
+  _tmpl$4 = /*#__PURE__*/template(`<div class=api-error role=alert> <button type=button aria-label="Dismiss error">×`),
+  _tmpl$5 = /*#__PURE__*/template(`<p class=milestone-due>Due `),
+  _tmpl$6 = /*#__PURE__*/template(`<div class=milestone-topic-list>`),
+  _tmpl$7 = /*#__PURE__*/template(`<section class="chat-panel milestone-overview"><header class=chat-header><h2></h2><p class=muted>Goal</p><div class=chat-header-actions><a class=preview-badge target=_blank rel="noopener noreferrer">GitHub ↗</a></div></header><div class=milestone-detail><div class=milestone-detail-actions><button type=button class=topic-status><span class=topic-status-dot aria-hidden=true></span></button><button type=button class=milestone-edit-button>Edit</button></div><div class=milestone-progress-label><strong> / <!> complete</strong></div><progress class=milestone-progress max=100></progress><div class=milestone-topics-heading><h3>Tasks</h3><select aria-label="Add task to goal"value><option value>Add task…`),
+  _tmpl$8 = /*#__PURE__*/template(`<option>`),
+  _tmpl$9 = /*#__PURE__*/template(`<p class=muted>No tasks assigned yet.`),
+  _tmpl$0 = /*#__PURE__*/template(`<small>`),
+  _tmpl$1 = /*#__PURE__*/template(`<div class=milestone-topic-row><button type=button class=milestone-topic-link><span class=milestone-task-title><span class=topic-status-dot aria-hidden=true></span></span><small></small></button><button type=button class=milestone-topic-remove title="Remove from goal">−`),
+  _tmpl$10 = /*#__PURE__*/template(`<code>`),
+  _tmpl$11 = /*#__PURE__*/template(`<a target=_blank rel="noopener noreferrer">`),
+  _tmpl$12 = /*#__PURE__*/template(`<a class=message-mention target=_blank rel="noopener noreferrer">`),
+  _tmpl$13 = /*#__PURE__*/template(`<span class=message-mention title="Declared Blackboard identity">`),
+  _tmpl$14 = /*#__PURE__*/template(`<div class=message-text>`),
+  _tmpl$15 = /*#__PURE__*/template(`<blockquote>`),
+  _tmpl$16 = /*#__PURE__*/template(`<div>`),
+  _tmpl$17 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M4 5h3v3H4zM4 11h3v3H4zM4 17h3v3H4zM10 6h10M10 12h10M10 18h10">`),
+  _tmpl$18 = /*#__PURE__*/template(`<span class=channel-hash>`),
+  _tmpl$19 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8">`),
+  _tmpl$20 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M8 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-3 3v-3"></path><path d="M13 7H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2l3 3v-3h3a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z">`),
+  _tmpl$21 = /*#__PURE__*/template(`<svg width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.6 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z"></path><path d="M8 9h8M8 13h5">`),
+  _tmpl$22 = /*#__PURE__*/template(`<label><input type=radio name=topicKind value=discussion><span>Discussion`),
+  _tmpl$23 = /*#__PURE__*/template(`<form id=new-topic-form class=new-topic-form><label for=topic-name></label><input id=topic-name name=topicName type=text required maxlength=80><fieldset class=topic-kind-options><legend class=sr-only>Topic type</legend><label><input type=radio name=topicKind value=talk><span>Talk</span></label><label><input type=radio name=topicKind value=list><span>List</span></label><label><input type=radio name=topicKind value=note><span>Note</span></label></fieldset><div class=new-topic-form-actions><button type=button class=cancel-topic-button>Cancel</button><button type=submit>`),
+  _tmpl$24 = /*#__PURE__*/template(`<p class=project-sidebar-error role=alert>`),
+  _tmpl$25 = /*#__PURE__*/template(`<section class=sidebar-section aria-label=Projects><button type=button class=sidebar-section-toggle aria-controls=projects-panel><span class=sidebar-label>Projects</span><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path></path></svg></button><div id=projects-panel class=sidebar-section-panel><nav class=project-list aria-label=Projects>`),
+  _tmpl$26 = /*#__PURE__*/template(`<nav class=milestone-list aria-label=Goals>`),
+  _tmpl$27 = /*#__PURE__*/template(`<p class=dialog-error role=alert>`),
+  _tmpl$28 = /*#__PURE__*/template(`<p role=status>`),
+  _tmpl$29 = /*#__PURE__*/template(`<section class=app-shell><aside class=sidebar aria-label="Chat topics"><div class=sidebar-actions><button type=button class=new-topic-button aria-controls=new-topic-form><span class=new-topic-plus aria-hidden=true>+</span> New topic</button></div><div class=topic-list-heading><div class=sidebar-label>Topics</div><button type=button class=topic-filter aria-label="Filter topics (coming soon)"aria-disabled=true title="Filter topics — coming soon"><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M3 6h4m4 0h10M3 12h10m4 0h4M3 18h2m4 0h12"></path><circle cx=9 cy=6 r=2></circle><circle cx=15 cy=12 r=2></circle><circle cx=7 cy=18 r=2></circle></svg></button></div><nav class=channel-list aria-label=Topics></nav><section class=sidebar-section aria-label=Goals><button type=button class=sidebar-section-toggle aria-controls=milestones-panel><span class=sidebar-label>Goals</span><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path></path></svg></button><div id=milestones-panel class=sidebar-section-panel><div class=milestone-list-actions><button type=button class=new-milestone-button><span aria-hidden=true>+</span> New goal</button></div></div></section><footer class=sidebar-footer><span class=status-dot role=img></span></footer></aside><dialog class="topic-status-dialog milestone-dialog"aria-labelledby=milestone-form-title><form><h2 id=milestone-form-title></h2><label for=milestone-name>Name</label><input id=milestone-name type=text required maxlength=256 autofocus><label for=milestone-description>Description</label><textarea id=milestone-description rows=4></textarea><label for=milestone-date>Due date <span class=muted>(optional)</span></label><input id=milestone-date type=date><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit></button></div></form></dialog><dialog class=topic-status-dialog aria-labelledby=topic-status-title></dialog><dialog class="topic-status-dialog reaction-dialog"aria-labelledby=reaction-title><h2 id=reaction-title>React</h2><div class=reaction-choices></div><div class=dialog-actions><button type=button autofocus>Cancel</button></div></dialog><dialog class=topic-status-dialog aria-labelledby=remove-topic-title>`),
+  _tmpl$30 = /*#__PURE__*/template(`<small class=topic-parent-hint>Under: `),
+  _tmpl$31 = /*#__PURE__*/template(`<button type=button class=topic-expand>`),
+  _tmpl$32 = /*#__PURE__*/template(`<small role=status>`),
+  _tmpl$33 = /*#__PURE__*/template(`<button type=button class=add-subtopic-button title="Create subtopic"><span aria-hidden=true>+`),
+  _tmpl$34 = /*#__PURE__*/template(`<div class=channel-row><button type=button class=channel-button></button><button type=button class=remove-topic-button aria-haspopup=dialog><span aria-hidden=true>−`),
+  _tmpl$35 = /*#__PURE__*/template(`<span class=topic-expand aria-hidden=true>`),
+  _tmpl$36 = /*#__PURE__*/template(`<div class="channel-row is-pending"><span class=topic-expand aria-hidden=true></span><div class=channel-button><small role=status>`),
+  _tmpl$37 = /*#__PURE__*/template(`<small>Closed`),
+  _tmpl$38 = /*#__PURE__*/template(`<button type=button class=project-list-item><span>`),
+  _tmpl$39 = /*#__PURE__*/template(`<p>`),
+  _tmpl$40 = /*#__PURE__*/template(`<button type=button class=milestone-list-item><span class=milestone-list-title></span><progress class=milestone-progress max=100>`),
+  _tmpl$41 = /*#__PURE__*/template(`<p class=muted>`),
+  _tmpl$42 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ Back to project`),
+  _tmpl$43 = /*#__PURE__*/template(`<option>Goal #`),
+  _tmpl$44 = /*#__PURE__*/template(`<label class=topic-milestone-select><span class=sr-only>Goal</span><span class=topic-milestone-value aria-hidden=true></span><svg width=12 height=12 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg><select aria-label="Add to goal"><option value>None`),
+  _tmpl$45 = /*#__PURE__*/template(`<form class=topic-tag-form aria-label="Add topic tag"><input type=text aria-label="Tag name"placeholder="Tag name"list=topic-tag-suggestions maxlength=50 required><datalist id=topic-tag-suggestions></datalist><button type=submit>Add</button><button type=button aria-label="Cancel tag">×`),
+  _tmpl$46 = /*#__PURE__*/template(`<div class=message-list role=log aria-label=Messages aria-live=polite aria-relevant=additions>`),
+  _tmpl$47 = /*#__PURE__*/template(`<form class=composer><div class=composer-box><textarea rows=2></textarea><button type=submit>Send <span aria-hidden=true>↗</span></button></div><p class=composer-hint>Enter to send · Shift + Enter for a new line <span>/`),
+  _tmpl$48 = /*#__PURE__*/template(`<section class=chat-panel><header class=chat-header><h2> </h2><div class=chat-header-actions><a class=preview-badge target=_blank rel=noreferrer>GitHub ↗</a></div></header><div class=chat-topic-controls><button type=button class=topic-status aria-haspopup=dialog><span class=topic-status-dot aria-hidden=true></span></button></div><div class=topic-tags aria-label="Topic tags">`),
+  _tmpl$49 = /*#__PURE__*/template(`<section class="chat-panel empty-chat"><h2></h2><p class=muted></p><button type=button>New topic`),
+  _tmpl$50 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ `),
+  _tmpl$51 = /*#__PURE__*/template(`<span class=topic-tag><span class=topic-tag-dot aria-hidden=true></span><span class=topic-tag-name></span><button type=button>×`),
+  _tmpl$52 = /*#__PURE__*/template(`<button type=button class=add-tag-button>+ Tag`),
+  _tmpl$53 = /*#__PURE__*/template(`<a class=message-reply-reference target=_blank rel="noopener noreferrer">↳ Replying to `),
+  _tmpl$54 = /*#__PURE__*/template(`<article class=message><span class=avatar aria-hidden=true></span><div class=message-content><div class=message-meta><span class=message-author></span><time></time></div><div class=message-reactions role=group aria-label=Reactions><button type=button class=reaction-add aria-label="Add or remove a reaction"aria-haspopup=dialog title=React><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round aria-hidden=true><path d="M21 13a9 9 0 1 1-10-10M8 14c1.8 2 6.2 2 8 0M17 4h6m-3-3v6"></path><path d="M8 9h.01M14 9h.01"stroke-width=3></path></svg></button><button type=button class=message-reply title="Quote reply">Reply`),
+  _tmpl$55 = /*#__PURE__*/template(`<span role=img>`),
+  _tmpl$56 = /*#__PURE__*/template(`<article class="message is-pending"><span class="avatar avatar-you"aria-hidden=true>Y</span><div class=message-content><div class=message-meta><span class=message-author>You</span><span class=delivery-state role=status>`),
+  _tmpl$57 = /*#__PURE__*/template(`<form><h2 id=topic-status-title></h2><div class=dialog-actions><button type=button class=dialog-cancel autofocus>Cancel</button><button type=submit>`),
+  _tmpl$58 = /*#__PURE__*/template(`<button type=button class=reaction-choice>`),
+  _tmpl$59 = /*#__PURE__*/template(`<button type=button>Yes`),
+  _tmpl$60 = /*#__PURE__*/template(`<button type=button>No`),
+  _tmpl$61 = /*#__PURE__*/template(`<div><h2 id=remove-topic-title></h2><div class=dialog-actions>`),
+  _tmpl$62 = /*#__PURE__*/template(`<button type=button>Archive`),
+  _tmpl$63 = /*#__PURE__*/template(`<button type=button>Delete`),
+  _tmpl$64 = /*#__PURE__*/template(`<button type=button autofocus>Cancel`);
 const formatTime = date => date.toLocaleTimeString([], {
   hour: '2-digit',
   minute: '2-digit'
@@ -5262,7 +5282,7 @@ const reactionSymbols = {
   eyes: ['👀', 'Eyes']
 };
 function App(props = {}) {
-  const defaults = parseRepository(props.defaultRepository || 'orazdow/Blackboard');
+  const defaults = props.defaultRepository === null ? null : parseRepository(props.defaultRepository || 'orazdow/Blackboard');
   let storage;
   try {
     storage = localStorage;
@@ -5285,7 +5305,7 @@ function App(props = {}) {
   const [recentRepositories, setRecentRepositories] = createSignal(restoredRecentRepositories);
   const [connection, setConnection] = createSignal({
     repository: initial,
-    credentials: credentials.get(initial)
+    credentials: initial ? credentials.get(initial) : null
   });
   const repository = () => connection().repository;
   const [permitted, setPermitted] = createSignal(false);
@@ -5328,34 +5348,77 @@ function App(props = {}) {
       return connection();
     },
     keyed: true,
-    children: selected => createComponent(Workspace, {
-      get repository() {
+    children: selected => createComponent(Show, {
+      get when() {
         return selected.repository;
       },
-      get credentials() {
-        return selected.credentials;
+      get fallback() {
+        return createComponent(UnconnectedWorkspace, {
+          onConnect: connect,
+          getCredentials: repo => credentials.get(repo),
+          get recentRepositories() {
+            return recentRepositories();
+          },
+          get projectsEnabled() {
+            return props.projectsEnabled;
+          }
+        });
       },
-      get permitted() {
-        return permitted();
+      get children() {
+        return createComponent(Workspace, {
+          get repository() {
+            return selected.repository;
+          },
+          get credentials() {
+            return selected.credentials;
+          },
+          get permitted() {
+            return permitted();
+          },
+          onConnect: connect,
+          onForget: forget,
+          getCredentials: repo => credentials.get(repo),
+          get recentRepositories() {
+            return recentRepositories();
+          },
+          onAccessChange: value => {
+            if (connection() === selected) setPermitted(value);
+          },
+          sessionState: sessionState,
+          get discussionsEnabled() {
+            return props.discussionsEnabled;
+          },
+          get projectsEnabled() {
+            return props.projectsEnabled;
+          }
+        });
+      }
+    })
+  });
+}
+function UnconnectedWorkspace(props) {
+  return (() => {
+    var _el$ = _tmpl$(),
+      _el$2 = _el$.firstChild;
+    insert(_el$2, createComponent(RepositorySelector, {
+      repository: null,
+      credentials: null,
+      permitted: false,
+      get onConnect() {
+        return props.onConnect;
       },
-      onConnect: connect,
-      onForget: forget,
-      getCredentials: repo => credentials.get(repo),
+      get getCredentials() {
+        return props.getCredentials;
+      },
       get recentRepositories() {
-        return recentRepositories();
-      },
-      onAccessChange: value => {
-        if (connection() === selected) setPermitted(value);
-      },
-      sessionState: sessionState,
-      get discussionsEnabled() {
-        return props.discussionsEnabled;
+        return props.recentRepositories;
       },
       get projectsEnabled() {
         return props.projectsEnabled;
       }
-    })
-  });
+    }));
+    return _el$;
+  })();
 }
 function Workspace(props) {
   const GITHUB_OWNER = props.repository.owner;
@@ -5946,64 +6009,64 @@ function Workspace(props) {
       },
       get fallback() {
         return (() => {
-          var _el$ = _tmpl$2(),
-            _el$2 = _el$.firstChild,
-            _el$4 = _el$2.nextSibling;
-          insert(_el$2, () => milestonesLoaded() ? 'Goal unavailable' : 'Loading goal…');
-          insert(_el$, createComponent(Show, {
+          var _el$3 = _tmpl$3(),
+            _el$4 = _el$3.firstChild,
+            _el$6 = _el$4.nextSibling;
+          insert(_el$4, () => milestonesLoaded() ? 'Goal unavailable' : 'Loading goal…');
+          insert(_el$3, createComponent(Show, {
             get when() {
               return error();
             },
             get children() {
-              var _el$3 = _tmpl$();
-              insert(_el$3, error);
-              return _el$3;
+              var _el$5 = _tmpl$2();
+              insert(_el$5, error);
+              return _el$5;
             }
-          }), _el$4);
-          _el$4.$$click = () => setActiveMilestoneId(null);
-          return _el$;
+          }), _el$6);
+          _el$6.$$click = () => setActiveMilestoneId(null);
+          return _el$3;
         })();
       },
       children: item => (() => {
-        var _el$5 = _tmpl$6(),
-          _el$6 = _el$5.firstChild,
-          _el$7 = _el$6.firstChild,
-          _el$8 = _el$7.nextSibling,
-          _el$9 = _el$8.nextSibling,
-          _el$0 = _el$9.firstChild,
-          _el$12 = _el$6.nextSibling,
-          _el$13 = _el$12.firstChild,
-          _el$14 = _el$13.firstChild;
-          _el$14.firstChild;
-          var _el$16 = _el$14.nextSibling,
-          _el$19 = _el$13.nextSibling,
-          _el$20 = _el$19.firstChild,
-          _el$21 = _el$20.firstChild,
-          _el$23 = _el$21.nextSibling;
-          _el$23.nextSibling;
-          var _el$24 = _el$19.nextSibling,
-          _el$25 = _el$24.nextSibling,
-          _el$26 = _el$25.firstChild,
-          _el$27 = _el$26.nextSibling;
-          _el$27.firstChild;
-        insert(_el$7, () => item().name);
-        insert(_el$5, createComponent(Show, {
+        var _el$7 = _tmpl$7(),
+          _el$8 = _el$7.firstChild,
+          _el$9 = _el$8.firstChild,
+          _el$0 = _el$9.nextSibling,
+          _el$1 = _el$0.nextSibling,
+          _el$10 = _el$1.firstChild,
+          _el$14 = _el$8.nextSibling,
+          _el$15 = _el$14.firstChild,
+          _el$16 = _el$15.firstChild;
+          _el$16.firstChild;
+          var _el$18 = _el$16.nextSibling,
+          _el$21 = _el$15.nextSibling,
+          _el$22 = _el$21.firstChild,
+          _el$23 = _el$22.firstChild,
+          _el$25 = _el$23.nextSibling;
+          _el$25.nextSibling;
+          var _el$26 = _el$21.nextSibling,
+          _el$27 = _el$26.nextSibling,
+          _el$28 = _el$27.firstChild,
+          _el$29 = _el$28.nextSibling;
+          _el$29.firstChild;
+        insert(_el$9, () => item().name);
+        insert(_el$7, createComponent(Show, {
           get when() {
             return error();
           },
           get children() {
-            var _el$1 = _tmpl$3(),
-              _el$10 = _el$1.firstChild,
-              _el$11 = _el$10.nextSibling;
-            insert(_el$1, error, _el$10);
-            _el$11.$$click = () => setError('');
-            return _el$1;
+            var _el$11 = _tmpl$4(),
+              _el$12 = _el$11.firstChild,
+              _el$13 = _el$12.nextSibling;
+            insert(_el$11, error, _el$12);
+            _el$13.$$click = () => setError('');
+            return _el$11;
           }
-        }), _el$12);
-        _el$14.$$click = toggleMilestoneState;
-        insert(_el$14, () => item().state === 'open' ? 'Open' : 'Closed', null);
-        _el$16.$$click = () => editMilestone(item());
-        insert(_el$12, createComponent(Show, {
+        }), _el$14);
+        _el$16.$$click = toggleMilestoneState;
+        insert(_el$16, () => item().state === 'open' ? 'Open' : 'Closed', null);
+        _el$18.$$click = () => editMilestone(item());
+        insert(_el$14, createComponent(Show, {
           get when() {
             return item().description;
           },
@@ -6014,82 +6077,82 @@ function Workspace(props) {
               }
             });
           }
-        }), _el$19);
-        insert(_el$12, createComponent(Show, {
+        }), _el$21);
+        insert(_el$14, createComponent(Show, {
           get when() {
             return item().dueDate;
           },
           get children() {
-            var _el$17 = _tmpl$4();
-              _el$17.firstChild;
-            insert(_el$17, () => formatDueDate(item().dueDate), null);
-            return _el$17;
+            var _el$19 = _tmpl$5();
+              _el$19.firstChild;
+            insert(_el$19, () => formatDueDate(item().dueDate), null);
+            return _el$19;
           }
-        }), _el$19);
-        insert(_el$20, () => currentGoalProgress(item()).complete, _el$21);
-        insert(_el$20, () => currentGoalProgress(item()).total, _el$23);
-        _el$27.addEventListener("change", event => {
+        }), _el$21);
+        insert(_el$22, () => currentGoalProgress(item()).complete, _el$23);
+        insert(_el$22, () => currentGoalProgress(item()).total, _el$25);
+        _el$29.addEventListener("change", event => {
           const id = Number(event.currentTarget.value);
           if (id) assignMilestone(id, item().id);
           event.currentTarget.value = '';
         });
-        _el$27.disabled = !isConfigured;
-        insert(_el$27, createComponent(For, {
+        _el$29.disabled = !isConfigured;
+        insert(_el$29, createComponent(For, {
           get each() {
             return topics().filter(entry => entry.kind !== 'discussion' && entry.milestoneId !== item().id);
           },
           children: entry => (() => {
-            var _el$30 = _tmpl$7();
-            insert(_el$30, () => entry.name, null);
-            insert(_el$30, () => entry.milestoneId ? ' (move here)' : '', null);
-            createRenderEffect(() => _el$30.disabled = assignmentBusy()[entry.id]);
-            createRenderEffect(() => _el$30.value = entry.id);
-            return _el$30;
+            var _el$32 = _tmpl$8();
+            insert(_el$32, () => entry.name, null);
+            insert(_el$32, () => entry.milestoneId ? ' (move here)' : '', null);
+            createRenderEffect(() => _el$32.disabled = assignmentBusy()[entry.id]);
+            createRenderEffect(() => _el$32.value = entry.id);
+            return _el$32;
           })()
         }), null);
-        insert(_el$12, createComponent(Show, {
+        insert(_el$14, createComponent(Show, {
           get when() {
             return linkedTopics().length;
           },
           get fallback() {
-            return _tmpl$8();
+            return _tmpl$9();
           },
           get children() {
-            var _el$29 = _tmpl$5();
-            insert(_el$29, createComponent(For, {
+            var _el$31 = _tmpl$6();
+            insert(_el$31, createComponent(For, {
               get each() {
                 return linkedTopics();
               },
               children: entry => (() => {
-                var _el$32 = _tmpl$0(),
-                  _el$33 = _el$32.firstChild,
-                  _el$34 = _el$33.firstChild,
+                var _el$34 = _tmpl$1(),
                   _el$35 = _el$34.firstChild,
-                  _el$37 = _el$34.nextSibling,
-                  _el$38 = _el$33.nextSibling;
-                _el$33.$$click = () => selectTopic(entry.id);
-                insert(_el$34, () => entry.name, null);
-                insert(_el$34, createComponent(Show, {
+                  _el$36 = _el$35.firstChild,
+                  _el$37 = _el$36.firstChild,
+                  _el$39 = _el$36.nextSibling,
+                  _el$40 = _el$35.nextSibling;
+                _el$35.$$click = () => selectTopic(entry.id);
+                insert(_el$36, () => entry.name, null);
+                insert(_el$36, createComponent(Show, {
                   get when() {
                     return entry.kind === 'list';
                   },
                   get children() {
-                    var _el$36 = _tmpl$9();
-                    insert(_el$36, () => listProgressLabel(entry));
-                    return _el$36;
+                    var _el$38 = _tmpl$0();
+                    insert(_el$38, () => listProgressLabel(entry));
+                    return _el$38;
                   }
                 }), null);
-                insert(_el$37, () => entry.state === 'open' ? 'Open' : 'Closed');
-                _el$38.$$click = () => assignMilestone(entry.id, null);
+                insert(_el$39, () => entry.state === 'open' ? 'Open' : 'Closed');
+                _el$40.$$click = () => assignMilestone(entry.id, null);
                 createRenderEffect(_p$ => {
                   var _v$9 = !!(assignmentBusy()[entry.id] || entry.syncState === 'confirming'),
                     _v$0 = !!(entry.state !== 'open'),
                     _v$1 = assignmentBusy()[entry.id],
                     _v$10 = `Remove ${entry.name} from goal`;
-                  _v$9 !== _p$.e && _el$32.classList.toggle("is-pending", _p$.e = _v$9);
-                  _v$0 !== _p$.t && _el$35.classList.toggle("is-closed", _p$.t = _v$0);
-                  _v$1 !== _p$.a && (_el$38.disabled = _p$.a = _v$1);
-                  _v$10 !== _p$.o && setAttribute(_el$38, "aria-label", _p$.o = _v$10);
+                  _v$9 !== _p$.e && _el$34.classList.toggle("is-pending", _p$.e = _v$9);
+                  _v$0 !== _p$.t && _el$37.classList.toggle("is-closed", _p$.t = _v$0);
+                  _v$1 !== _p$.a && (_el$40.disabled = _p$.a = _v$1);
+                  _v$10 !== _p$.o && setAttribute(_el$40, "aria-label", _p$.o = _v$10);
                   return _p$;
                 }, {
                   e: undefined,
@@ -6097,10 +6160,10 @@ function Workspace(props) {
                   a: undefined,
                   o: undefined
                 });
-                return _el$32;
+                return _el$34;
               })()
             }));
-            return _el$29;
+            return _el$31;
           }
         }), null);
         createRenderEffect(_p$ => {
@@ -6112,14 +6175,14 @@ function Workspace(props) {
             _v$6 = item().state === 'open' ? 'Close goal' : 'Reopen goal',
             _v$7 = milestoneStateBusy(),
             _v$8 = `${item().name}: ${currentGoalProgress(item()).complete} of ${currentGoalProgress(item()).total} complete`;
-          _v$ !== _p$.e && setAttribute(_el$5, "aria-label", _p$.e = _v$);
-          _v$2 !== _p$.t && setAttribute(_el$0, "href", _p$.t = _v$2);
-          _v$3 !== _p$.a && _el$14.classList.toggle("is-closed", _p$.a = _v$3);
-          _v$4 !== _p$.o && _el$14.classList.toggle("is-pending", _p$.o = _v$4);
-          _v$5 !== _p$.i && (_el$14.disabled = _p$.i = _v$5);
-          _v$6 !== _p$.n && setAttribute(_el$14, "title", _p$.n = _v$6);
-          _v$7 !== _p$.s && (_el$16.disabled = _p$.s = _v$7);
-          _v$8 !== _p$.h && setAttribute(_el$24, "aria-label", _p$.h = _v$8);
+          _v$ !== _p$.e && setAttribute(_el$7, "aria-label", _p$.e = _v$);
+          _v$2 !== _p$.t && setAttribute(_el$10, "href", _p$.t = _v$2);
+          _v$3 !== _p$.a && _el$16.classList.toggle("is-closed", _p$.a = _v$3);
+          _v$4 !== _p$.o && _el$16.classList.toggle("is-pending", _p$.o = _v$4);
+          _v$5 !== _p$.i && (_el$16.disabled = _p$.i = _v$5);
+          _v$6 !== _p$.n && setAttribute(_el$16, "title", _p$.n = _v$6);
+          _v$7 !== _p$.s && (_el$18.disabled = _p$.s = _v$7);
+          _v$8 !== _p$.h && setAttribute(_el$26, "aria-label", _p$.h = _v$8);
           return _p$;
         }, {
           e: undefined,
@@ -6131,8 +6194,8 @@ function Workspace(props) {
           s: undefined,
           h: undefined
         });
-        createRenderEffect(() => _el$24.value = currentGoalProgress(item()).percent);
-        return _el$5;
+        createRenderEffect(() => _el$26.value = currentGoalProgress(item()).percent);
+        return _el$7;
       })()
     });
   }
@@ -6156,15 +6219,15 @@ function Workspace(props) {
       },
       children: token => {
         if (token.type === 'code') return (() => {
-          var _el$39 = _tmpl$1();
-          insert(_el$39, () => token.text);
-          return _el$39;
+          var _el$41 = _tmpl$10();
+          insert(_el$41, () => token.text);
+          return _el$41;
         })();
         if (token.type === 'link') return (() => {
-          var _el$40 = _tmpl$10();
-          insert(_el$40, () => token.text);
-          createRenderEffect(() => setAttribute(_el$40, "href", token.url));
-          return _el$40;
+          var _el$42 = _tmpl$11();
+          insert(_el$42, () => token.text);
+          createRenderEffect(() => setAttribute(_el$42, "href", token.url));
+          return _el$42;
         })();
         if (token.type === 'mention') return createComponent(Show, {
           get when() {
@@ -6172,55 +6235,55 @@ function Workspace(props) {
           },
           get fallback() {
             return (() => {
-              var _el$42 = _tmpl$12();
-              insert(_el$42, () => token.text);
-              return _el$42;
+              var _el$44 = _tmpl$13();
+              insert(_el$44, () => token.text);
+              return _el$44;
             })();
           },
           get children() {
-            var _el$41 = _tmpl$11();
-            insert(_el$41, () => token.text);
-            createRenderEffect(() => setAttribute(_el$41, "href", `https://github.com/${encodeURIComponent(token.name)}`));
-            return _el$41;
+            var _el$43 = _tmpl$12();
+            insert(_el$43, () => token.text);
+            createRenderEffect(() => setAttribute(_el$43, "href", `https://github.com/${encodeURIComponent(token.name)}`));
+            return _el$43;
           }
         });
         return token.text;
       }
     });
     return (() => {
-      var _el$43 = _tmpl$13();
-      insert(_el$43, createComponent(For, {
+      var _el$45 = _tmpl$14();
+      insert(_el$45, createComponent(For, {
         get each() {
           return messageBlocks(props.text);
         },
         children: block => block.quote ? (() => {
-          var _el$44 = _tmpl$14();
-          insert(_el$44, createComponent(Inline, {
+          var _el$46 = _tmpl$15();
+          insert(_el$46, createComponent(Inline, {
             get text() {
               return block.text;
             }
           }));
-          return _el$44;
+          return _el$46;
         })() : (() => {
-          var _el$45 = _tmpl$15();
-          insert(_el$45, createComponent(Inline, {
+          var _el$47 = _tmpl$16();
+          insert(_el$47, createComponent(Inline, {
             get text() {
               return block.text;
             }
           }));
-          return _el$45;
+          return _el$47;
         })()
       }));
-      return _el$43;
+      return _el$45;
     })();
   }
   function TopicMarker(props) {
     const type = props.kind === 'note' ? 'Note' : props.kind === 'list' ? 'List' : props.kind === 'discussion' ? 'Discussion' : 'Talk';
     return (() => {
-      var _el$46 = _tmpl$17();
-      setAttribute(_el$46, "title", type);
-      setAttribute(_el$46, "aria-label", type);
-      insert(_el$46, createComponent(Show, {
+      var _el$48 = _tmpl$18();
+      setAttribute(_el$48, "title", type);
+      setAttribute(_el$48, "aria-label", type);
+      insert(_el$48, createComponent(Show, {
         get when() {
           return props.kind === 'list';
         },
@@ -6235,23 +6298,23 @@ function Workspace(props) {
                   return props.kind === 'discussion';
                 },
                 get fallback() {
-                  return _tmpl$20();
+                  return _tmpl$21();
                 },
                 get children() {
-                  return _tmpl$19();
+                  return _tmpl$20();
                 }
               });
             },
             get children() {
-              return _tmpl$18();
+              return _tmpl$19();
             }
           });
         },
         get children() {
-          return _tmpl$16();
+          return _tmpl$17();
         }
       }));
-      return _el$46;
+      return _el$48;
     })();
   }
   async function openReactions(commentId) {
@@ -6580,42 +6643,42 @@ function Workspace(props) {
     }
   }
   return (() => {
-    var _el$51 = _tmpl$28(),
-      _el$52 = _el$51.firstChild,
-      _el$53 = _el$52.firstChild,
+    var _el$53 = _tmpl$29(),
       _el$54 = _el$53.firstChild,
-      _el$71 = _el$53.nextSibling,
-      _el$72 = _el$71.nextSibling,
-      _el$81 = _el$72.nextSibling,
-      _el$82 = _el$81.firstChild,
-      _el$83 = _el$82.firstChild,
-      _el$84 = _el$83.nextSibling,
+      _el$55 = _el$54.firstChild,
+      _el$56 = _el$55.firstChild,
+      _el$73 = _el$55.nextSibling,
+      _el$74 = _el$73.nextSibling,
+      _el$83 = _el$74.nextSibling,
+      _el$84 = _el$83.firstChild,
       _el$85 = _el$84.firstChild,
-      _el$86 = _el$82.nextSibling,
+      _el$86 = _el$85.nextSibling,
       _el$87 = _el$86.firstChild,
-      _el$88 = _el$87.firstChild,
-      _el$90 = _el$81.nextSibling,
-      _el$91 = _el$90.firstChild,
-      _el$92 = _el$52.nextSibling,
+      _el$88 = _el$84.nextSibling,
+      _el$89 = _el$88.firstChild,
+      _el$90 = _el$89.firstChild,
+      _el$92 = _el$83.nextSibling,
       _el$93 = _el$92.firstChild,
-      _el$94 = _el$93.firstChild,
-      _el$95 = _el$94.nextSibling,
-      _el$96 = _el$95.nextSibling,
+      _el$94 = _el$54.nextSibling,
+      _el$95 = _el$94.firstChild,
+      _el$96 = _el$95.firstChild,
       _el$97 = _el$96.nextSibling,
       _el$98 = _el$97.nextSibling,
       _el$99 = _el$98.nextSibling,
       _el$100 = _el$99.nextSibling,
-      _el$102 = _el$100.nextSibling,
-      _el$103 = _el$102.firstChild,
-      _el$104 = _el$103.nextSibling,
-      _el$105 = _el$92.nextSibling,
+      _el$101 = _el$100.nextSibling,
+      _el$102 = _el$101.nextSibling,
+      _el$104 = _el$102.nextSibling,
+      _el$105 = _el$104.firstChild,
       _el$106 = _el$105.nextSibling,
-      _el$107 = _el$106.firstChild,
+      _el$107 = _el$94.nextSibling,
       _el$108 = _el$107.nextSibling,
-      _el$111 = _el$108.nextSibling,
-      _el$112 = _el$111.firstChild,
-      _el$113 = _el$106.nextSibling;
-    insert(_el$52, createComponent(RepositorySelector, {
+      _el$109 = _el$108.firstChild,
+      _el$110 = _el$109.nextSibling,
+      _el$113 = _el$110.nextSibling,
+      _el$114 = _el$113.firstChild,
+      _el$115 = _el$108.nextSibling;
+    insert(_el$54, createComponent(RepositorySelector, {
       get repository() {
         return props.repository;
       },
@@ -6641,65 +6704,65 @@ function Workspace(props) {
         return switchingDisabled();
       },
       projectsEnabled: projectsEnabled
-    }), _el$53);
-    _el$54.$$click = () => creatingTopic() ? closeTopicForm() : startTopic();
+    }), _el$55);
+    _el$56.$$click = () => creatingTopic() ? closeTopicForm() : startTopic();
     var _ref$ = newTopicButton;
-    typeof _ref$ === "function" ? use(_ref$, _el$54) : newTopicButton = _el$54;
-    _el$54.disabled = !isConfigured;
-    insert(_el$53, createComponent(Show, {
+    typeof _ref$ === "function" ? use(_ref$, _el$56) : newTopicButton = _el$56;
+    _el$56.disabled = !isConfigured;
+    insert(_el$55, createComponent(Show, {
       get when() {
         return creatingTopic();
       },
       get children() {
-        var _el$55 = _tmpl$22(),
-          _el$56 = _el$55.firstChild,
-          _el$57 = _el$56.nextSibling,
-          _el$58 = _el$57.nextSibling,
-          _el$59 = _el$58.firstChild,
+        var _el$57 = _tmpl$23(),
+          _el$58 = _el$57.firstChild,
+          _el$59 = _el$58.nextSibling,
           _el$60 = _el$59.nextSibling,
           _el$61 = _el$60.firstChild,
-          _el$62 = _el$60.nextSibling,
+          _el$62 = _el$61.nextSibling,
           _el$63 = _el$62.firstChild,
           _el$64 = _el$62.nextSibling,
           _el$65 = _el$64.firstChild,
-          _el$68 = _el$58.nextSibling,
-          _el$69 = _el$68.firstChild,
-          _el$70 = _el$69.nextSibling;
-        _el$55.$$keydown = event => {
+          _el$66 = _el$64.nextSibling,
+          _el$67 = _el$66.firstChild,
+          _el$70 = _el$60.nextSibling,
+          _el$71 = _el$70.firstChild,
+          _el$72 = _el$71.nextSibling;
+        _el$57.$$keydown = event => {
           if (event.key === 'Escape') closeTopicForm();
         };
-        _el$55.addEventListener("submit", createTopic);
-        insert(_el$56, () => topicParent() ? 'Sub-topic name' : 'Topic name');
-        insert(_el$55, createComponent(Show, {
+        _el$57.addEventListener("submit", createTopic);
+        insert(_el$58, () => topicParent() ? 'Sub-topic name' : 'Topic name');
+        insert(_el$57, createComponent(Show, {
           get when() {
             return topicParent();
           },
           children: parent => (() => {
-            var _el$114 = _tmpl$29();
-              _el$114.firstChild;
-            insert(_el$114, () => parent().name, null);
-            return _el$114;
+            var _el$116 = _tmpl$30();
+              _el$116.firstChild;
+            insert(_el$116, () => parent().name, null);
+            return _el$116;
           })()
-        }), _el$57);
-        _el$57.$$input = event => setTopicName(event.currentTarget.value);
-        use(element => requestAnimationFrame(() => element.focus()), _el$57);
-        _el$61.addEventListener("change", () => chooseTopicKind('talk'));
-        _el$63.addEventListener("change", () => chooseTopicKind('list'));
-        _el$65.addEventListener("change", () => chooseTopicKind('note'));
-        insert(_el$58, createComponent(Show, {
+        }), _el$59);
+        _el$59.$$input = event => setTopicName(event.currentTarget.value);
+        use(element => requestAnimationFrame(() => element.focus()), _el$59);
+        _el$63.addEventListener("change", () => chooseTopicKind('talk'));
+        _el$65.addEventListener("change", () => chooseTopicKind('list'));
+        _el$67.addEventListener("change", () => chooseTopicKind('note'));
+        insert(_el$60, createComponent(Show, {
           get when() {
             return discussionsEnabled && !topicParent();
           },
           get children() {
-            var _el$66 = _tmpl$21(),
-              _el$67 = _el$66.firstChild;
-            _el$67.addEventListener("change", () => chooseTopicKind('discussion'));
-            createRenderEffect(() => _el$67.checked = creationKind() === 'discussion');
-            return _el$66;
+            var _el$68 = _tmpl$22(),
+              _el$69 = _el$68.firstChild;
+            _el$69.addEventListener("change", () => chooseTopicKind('discussion'));
+            createRenderEffect(() => _el$69.checked = creationKind() === 'discussion');
+            return _el$68;
           }
         }), null);
-        _el$69.$$click = closeTopicForm;
-        insert(_el$70, (() => {
+        _el$71.$$click = closeTopicForm;
+        insert(_el$72, (() => {
           var _c$ = memo(() => !!creating());
           return () => _c$() ? 'Creating…' : createUncertain() ? 'Unconfirmed' : 'Create';
         })());
@@ -6709,11 +6772,11 @@ function Workspace(props) {
             _v$13 = creating() || createUncertain(),
             _v$14 = creating(),
             _v$15 = !topicName().trim() || creating() || createUncertain();
-          _v$11 !== _p$.e && (_el$57.disabled = _p$.e = _v$11);
-          _v$12 !== _p$.t && _el$58.classList.toggle("with-discussions", _p$.t = _v$12);
-          _v$13 !== _p$.a && (_el$58.disabled = _p$.a = _v$13);
-          _v$14 !== _p$.o && (_el$69.disabled = _p$.o = _v$14);
-          _v$15 !== _p$.i && (_el$70.disabled = _p$.i = _v$15);
+          _v$11 !== _p$.e && (_el$59.disabled = _p$.e = _v$11);
+          _v$12 !== _p$.t && _el$60.classList.toggle("with-discussions", _p$.t = _v$12);
+          _v$13 !== _p$.a && (_el$60.disabled = _p$.a = _v$13);
+          _v$14 !== _p$.o && (_el$71.disabled = _p$.o = _v$14);
+          _v$15 !== _p$.i && (_el$72.disabled = _p$.i = _v$15);
           return _p$;
         }, {
           e: undefined,
@@ -6722,83 +6785,83 @@ function Workspace(props) {
           o: undefined,
           i: undefined
         });
-        createRenderEffect(() => _el$57.value = topicName());
-        createRenderEffect(() => _el$61.checked = creationKind() === 'talk');
-        createRenderEffect(() => _el$63.checked = creationKind() === 'list');
-        createRenderEffect(() => _el$65.checked = creationKind() === 'note');
-        return _el$55;
+        createRenderEffect(() => _el$59.value = topicName());
+        createRenderEffect(() => _el$63.checked = creationKind() === 'talk');
+        createRenderEffect(() => _el$65.checked = creationKind() === 'list');
+        createRenderEffect(() => _el$67.checked = creationKind() === 'note');
+        return _el$57;
       }
     }), null);
-    insert(_el$72, createComponent(For, {
+    insert(_el$74, createComponent(For, {
       get each() {
         return visibleTopics();
       },
       children: item => (() => {
-        var _el$116 = _tmpl$33(),
-          _el$118 = _el$116.firstChild,
-          _el$121 = _el$118.nextSibling;
-        insert(_el$116, createComponent(Show, {
+        var _el$118 = _tmpl$34(),
+          _el$120 = _el$118.firstChild,
+          _el$123 = _el$120.nextSibling;
+        insert(_el$118, createComponent(Show, {
           get when() {
             return item.hasChildren;
           },
           get fallback() {
-            return _tmpl$34();
+            return _tmpl$35();
           },
           get children() {
-            var _el$117 = _tmpl$30();
-            _el$117.$$click = () => toggleTopic(item.id);
-            insert(_el$117, () => collapsedTopics().has(item.id) ? '›' : '⌄');
+            var _el$119 = _tmpl$31();
+            _el$119.$$click = () => toggleTopic(item.id);
+            insert(_el$119, () => collapsedTopics().has(item.id) ? '›' : '⌄');
             createRenderEffect(_p$ => {
               var _v$37 = `${collapsedTopics().has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`,
                 _v$38 = !collapsedTopics().has(item.id);
-              _v$37 !== _p$.e && setAttribute(_el$117, "aria-label", _p$.e = _v$37);
-              _v$38 !== _p$.t && setAttribute(_el$117, "aria-expanded", _p$.t = _v$38);
+              _v$37 !== _p$.e && setAttribute(_el$119, "aria-label", _p$.e = _v$37);
+              _v$38 !== _p$.t && setAttribute(_el$119, "aria-expanded", _p$.t = _v$38);
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$117;
+            return _el$119;
           }
-        }), _el$118);
-        _el$118.$$click = () => selectTopic(item.id);
-        insert(_el$118, createComponent(TopicMarker, {
+        }), _el$120);
+        _el$120.$$click = () => selectTopic(item.id);
+        insert(_el$120, createComponent(TopicMarker, {
           get kind() {
             return item.kind;
           }
         }), null);
-        insert(_el$118, () => item.name, null);
-        insert(_el$118, createComponent(Show, {
+        insert(_el$120, () => item.name, null);
+        insert(_el$120, createComponent(Show, {
           get when() {
             return closing()[item.id] || item.state === 'closed';
           },
           get children() {
-            var _el$119 = _tmpl$31();
-            insert(_el$119, () => statusLabel(item.id) || 'Closed');
-            return _el$119;
+            var _el$121 = _tmpl$32();
+            insert(_el$121, () => statusLabel(item.id) || 'Closed');
+            return _el$121;
           }
         }), null);
-        insert(_el$116, createComponent(Show, {
+        insert(_el$118, createComponent(Show, {
           get when() {
             return item.kind !== 'discussion';
           },
           get children() {
-            var _el$120 = _tmpl$32();
-            _el$120.$$click = () => startTopic(item);
+            var _el$122 = _tmpl$33();
+            _el$122.$$click = () => startTopic(item);
             createRenderEffect(_p$ => {
               var _v$39 = Boolean(closing()[item.id]) || creating() || createUncertain() || !isConfigured,
                 _v$40 = `Create subtopic under ${item.name}`;
-              _v$39 !== _p$.e && (_el$120.disabled = _p$.e = _v$39);
-              _v$40 !== _p$.t && setAttribute(_el$120, "aria-label", _p$.t = _v$40);
+              _v$39 !== _p$.e && (_el$122.disabled = _p$.e = _v$39);
+              _v$40 !== _p$.t && setAttribute(_el$122, "aria-label", _p$.t = _v$40);
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$120;
+            return _el$122;
           }
-        }), _el$121);
-        _el$121.$$click = () => requestRemoval(item);
+        }), _el$123);
+        _el$123.$$click = () => requestRemoval(item);
         createRenderEffect(_p$ => {
           var _v$41 = `${Math.min(item.depth, 5) * 16}px`,
             _v$42 = !!(activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id),
@@ -6808,14 +6871,14 @@ function Workspace(props) {
             _v$46 = Boolean(closing()[item.id]),
             _v$47 = `Remove topic ${item.name}`,
             _v$48 = `Remove topic ${item.name}`;
-          _v$41 !== _p$.e && setStyleProperty(_el$116, "margin-left", _p$.e = _v$41);
-          _v$42 !== _p$.t && _el$116.classList.toggle("is-active", _p$.t = _v$42);
-          _v$43 !== _p$.a && _el$116.classList.toggle("is-pending", _p$.a = _v$43);
-          _v$44 !== _p$.o && setAttribute(_el$116, "aria-busy", _p$.o = _v$44);
-          _v$45 !== _p$.i && setAttribute(_el$118, "aria-current", _p$.i = _v$45);
-          _v$46 !== _p$.n && (_el$121.disabled = _p$.n = _v$46);
-          _v$47 !== _p$.s && setAttribute(_el$121, "aria-label", _p$.s = _v$47);
-          _v$48 !== _p$.h && setAttribute(_el$121, "title", _p$.h = _v$48);
+          _v$41 !== _p$.e && setStyleProperty(_el$118, "margin-left", _p$.e = _v$41);
+          _v$42 !== _p$.t && _el$118.classList.toggle("is-active", _p$.t = _v$42);
+          _v$43 !== _p$.a && _el$118.classList.toggle("is-pending", _p$.a = _v$43);
+          _v$44 !== _p$.o && setAttribute(_el$118, "aria-busy", _p$.o = _v$44);
+          _v$45 !== _p$.i && setAttribute(_el$120, "aria-current", _p$.i = _v$45);
+          _v$46 !== _p$.n && (_el$123.disabled = _p$.n = _v$46);
+          _v$47 !== _p$.s && setAttribute(_el$123, "aria-label", _p$.s = _v$47);
+          _v$48 !== _p$.h && setAttribute(_el$123, "title", _p$.h = _v$48);
           return _p$;
         }, {
           e: undefined,
@@ -6827,87 +6890,87 @@ function Workspace(props) {
           s: undefined,
           h: undefined
         });
-        return _el$116;
+        return _el$118;
       })()
     }), null);
-    insert(_el$72, createComponent(Show, {
+    insert(_el$74, createComponent(Show, {
       get when() {
         return pendingTopic();
       },
       children: pending => (() => {
-        var _el$123 = _tmpl$35(),
-          _el$124 = _el$123.firstChild,
-          _el$125 = _el$124.nextSibling,
-          _el$126 = _el$125.firstChild;
-        insert(_el$125, createComponent(TopicMarker, {
+        var _el$125 = _tmpl$36(),
+          _el$126 = _el$125.firstChild,
+          _el$127 = _el$126.nextSibling,
+          _el$128 = _el$127.firstChild;
+        insert(_el$127, createComponent(TopicMarker, {
           get kind() {
             return pending().kind;
           }
-        }), _el$126);
-        insert(_el$125, () => pending().name, _el$126);
-        insert(_el$126, () => pending().status === 'creating' ? 'Creating…' : 'Unconfirmed');
+        }), _el$128);
+        insert(_el$127, () => pending().name, _el$128);
+        insert(_el$128, () => pending().status === 'creating' ? 'Creating…' : 'Unconfirmed');
         createRenderEffect(_p$ => {
           var _v$49 = pending().parentId ? `${Math.min((visibleTopics().find(item => item.id === pending().parentId)?.depth ?? 0) + 1, 5) * 16}px` : '0',
             _v$50 = pending().status === 'creating';
-          _v$49 !== _p$.e && setStyleProperty(_el$123, "margin-left", _p$.e = _v$49);
-          _v$50 !== _p$.t && setAttribute(_el$123, "aria-busy", _p$.t = _v$50);
+          _v$49 !== _p$.e && setStyleProperty(_el$125, "margin-left", _p$.e = _v$49);
+          _v$50 !== _p$.t && setAttribute(_el$125, "aria-busy", _p$.t = _v$50);
           return _p$;
         }, {
           e: undefined,
           t: undefined
         });
-        return _el$123;
+        return _el$125;
       })()
     }), null);
-    insert(_el$52, createComponent(Show, {
+    insert(_el$54, createComponent(Show, {
       when: projectsEnabled,
       get children() {
-        var _el$73 = _tmpl$24(),
-          _el$74 = _el$73.firstChild,
-          _el$75 = _el$74.firstChild,
-          _el$76 = _el$75.nextSibling,
+        var _el$75 = _tmpl$25(),
+          _el$76 = _el$75.firstChild,
           _el$77 = _el$76.firstChild,
-          _el$78 = _el$74.nextSibling,
-          _el$80 = _el$78.firstChild;
-        _el$74.$$click = () => toggleSidebarSection('projects');
-        insert(_el$78, createComponent(Show, {
+          _el$78 = _el$77.nextSibling,
+          _el$79 = _el$78.firstChild,
+          _el$80 = _el$76.nextSibling,
+          _el$82 = _el$80.firstChild;
+        _el$76.$$click = () => toggleSidebarSection('projects');
+        insert(_el$80, createComponent(Show, {
           get when() {
             return projectsError();
           },
           get children() {
-            var _el$79 = _tmpl$23();
-            insert(_el$79, projectsError);
-            return _el$79;
+            var _el$81 = _tmpl$24();
+            insert(_el$81, projectsError);
+            return _el$81;
           }
-        }), _el$80);
-        insert(_el$80, createComponent(For, {
+        }), _el$82);
+        insert(_el$82, createComponent(For, {
           get each() {
             return projects();
           },
           children: item => (() => {
-            var _el$127 = _tmpl$37(),
-              _el$128 = _el$127.firstChild;
-            _el$127.$$click = () => selectProject(item.id);
-            insert(_el$128, () => item.name);
-            insert(_el$127, createComponent(Show, {
+            var _el$129 = _tmpl$38(),
+              _el$130 = _el$129.firstChild;
+            _el$129.$$click = () => selectProject(item.id);
+            insert(_el$130, () => item.name);
+            insert(_el$129, createComponent(Show, {
               get when() {
                 return item.closed;
               },
               get children() {
-                return _tmpl$36();
+                return _tmpl$37();
               }
             }), null);
             createRenderEffect(_p$ => {
               var _v$51 = !!(activeProjectId() === item.id),
                 _v$52 = activeProjectId() === item.id ? 'page' : undefined;
-              _v$51 !== _p$.e && _el$127.classList.toggle("is-active", _p$.e = _v$51);
-              _v$52 !== _p$.t && setAttribute(_el$127, "aria-current", _p$.t = _v$52);
+              _v$51 !== _p$.e && _el$129.classList.toggle("is-active", _p$.e = _v$51);
+              _v$52 !== _p$.t && setAttribute(_el$129, "aria-current", _p$.t = _v$52);
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$127;
+            return _el$129;
           })()
         }));
         createRenderEffect(_p$ => {
@@ -6915,10 +6978,10 @@ function Workspace(props) {
             _v$17 = projectsExpanded(),
             _v$18 = projectsExpanded() ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6',
             _v$19 = !projectsExpanded();
-          _v$16 !== _p$.e && _el$73.classList.toggle("is-expanded", _p$.e = _v$16);
-          _v$17 !== _p$.t && setAttribute(_el$74, "aria-expanded", _p$.t = _v$17);
-          _v$18 !== _p$.a && setAttribute(_el$77, "d", _p$.a = _v$18);
-          _v$19 !== _p$.o && (_el$78.hidden = _p$.o = _v$19);
+          _v$16 !== _p$.e && _el$75.classList.toggle("is-expanded", _p$.e = _v$16);
+          _v$17 !== _p$.t && setAttribute(_el$76, "aria-expanded", _p$.t = _v$17);
+          _v$18 !== _p$.a && setAttribute(_el$79, "d", _p$.a = _v$18);
+          _v$19 !== _p$.o && (_el$80.hidden = _p$.o = _v$19);
           return _p$;
         }, {
           e: undefined,
@@ -6926,41 +6989,41 @@ function Workspace(props) {
           a: undefined,
           o: undefined
         });
-        return _el$73;
+        return _el$75;
       }
-    }), _el$81);
-    _el$82.$$click = () => toggleSidebarSection('milestones');
-    _el$88.$$click = () => editMilestone();
-    _el$88.disabled = !isConfigured;
-    insert(_el$86, createComponent(Show, {
+    }), _el$83);
+    _el$84.$$click = () => toggleSidebarSection('milestones');
+    _el$90.$$click = () => editMilestone();
+    _el$90.disabled = !isConfigured;
+    insert(_el$88, createComponent(Show, {
       get when() {
         return milestones().length;
       },
       get fallback() {
         return (() => {
-          var _el$130 = _tmpl$38();
-          insert(_el$130, () => !isConfigured ? 'Connect to GitHub to load goals.' : milestonesLoaded() ? 'No goals yet.' : 'Loading goals…');
-          return _el$130;
+          var _el$132 = _tmpl$39();
+          insert(_el$132, () => !isConfigured ? 'Connect to GitHub to load goals.' : milestonesLoaded() ? 'No goals yet.' : 'Loading goals…');
+          return _el$132;
         })();
       },
       get children() {
-        var _el$89 = _tmpl$25();
-        insert(_el$89, createComponent(For, {
+        var _el$91 = _tmpl$26();
+        insert(_el$91, createComponent(For, {
           get each() {
             return milestones();
           },
           children: item => (() => {
-            var _el$131 = _tmpl$39(),
-              _el$132 = _el$131.firstChild,
-              _el$134 = _el$132.nextSibling;
-            _el$131.$$click = () => selectMilestone(item.id);
-            insert(_el$132, () => item.name, null);
-            insert(_el$132, createComponent(Show, {
+            var _el$133 = _tmpl$40(),
+              _el$134 = _el$133.firstChild,
+              _el$136 = _el$134.nextSibling;
+            _el$133.$$click = () => selectMilestone(item.id);
+            insert(_el$134, () => item.name, null);
+            insert(_el$134, createComponent(Show, {
               get when() {
                 return item.state === 'closed';
               },
               get children() {
-                return _tmpl$36();
+                return _tmpl$37();
               }
             }), null);
             createRenderEffect(_p$ => {
@@ -6968,10 +7031,10 @@ function Workspace(props) {
                 _v$54 = !!(item.syncState === 'confirming'),
                 _v$55 = activeMilestoneId() === item.id ? 'page' : undefined,
                 _v$56 = `${item.name}: ${currentGoalProgress(item).complete} of ${currentGoalProgress(item).total} complete`;
-              _v$53 !== _p$.e && _el$131.classList.toggle("is-active", _p$.e = _v$53);
-              _v$54 !== _p$.t && _el$131.classList.toggle("is-pending", _p$.t = _v$54);
-              _v$55 !== _p$.a && setAttribute(_el$131, "aria-current", _p$.a = _v$55);
-              _v$56 !== _p$.o && setAttribute(_el$134, "aria-label", _p$.o = _v$56);
+              _v$53 !== _p$.e && _el$133.classList.toggle("is-active", _p$.e = _v$53);
+              _v$54 !== _p$.t && _el$133.classList.toggle("is-pending", _p$.t = _v$54);
+              _v$55 !== _p$.a && setAttribute(_el$133, "aria-current", _p$.a = _v$55);
+              _v$56 !== _p$.o && setAttribute(_el$136, "aria-label", _p$.o = _v$56);
               return _p$;
             }, {
               e: undefined,
@@ -6979,14 +7042,14 @@ function Workspace(props) {
               a: undefined,
               o: undefined
             });
-            createRenderEffect(() => _el$134.value = currentGoalProgress(item).percent);
-            return _el$131;
+            createRenderEffect(() => _el$136.value = currentGoalProgress(item).percent);
+            return _el$133;
           })()
         }));
-        return _el$89;
+        return _el$91;
       }
     }), null);
-    insert(_el$51, createComponent(Show, {
+    insert(_el$53, createComponent(Show, {
       get when() {
         return projectsEnabled && activeProjectId();
       },
@@ -7006,161 +7069,161 @@ function Workspace(props) {
               },
               get fallback() {
                 return (() => {
-                  var _el$172 = _tmpl$48(),
-                    _el$173 = _el$172.firstChild,
-                    _el$174 = _el$173.nextSibling,
-                    _el$176 = _el$174.nextSibling;
-                  insert(_el$173, () => !isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet');
-                  insert(_el$174, !isConfigured ? 'Open the repository menu and choose Permit to connect.' : 'Create a topic to start a conversation.');
-                  insert(_el$172, createComponent(Show, {
+                  var _el$174 = _tmpl$49(),
+                    _el$175 = _el$174.firstChild,
+                    _el$176 = _el$175.nextSibling,
+                    _el$178 = _el$176.nextSibling;
+                  insert(_el$175, () => !isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet');
+                  insert(_el$176, !isConfigured ? 'Open the repository menu and choose Permit to connect.' : 'Create a topic to start a conversation.');
+                  insert(_el$174, createComponent(Show, {
                     get when() {
                       return error();
                     },
                     get children() {
-                      var _el$175 = _tmpl$();
-                      insert(_el$175, error);
-                      return _el$175;
+                      var _el$177 = _tmpl$2();
+                      insert(_el$177, error);
+                      return _el$177;
                     }
-                  }), _el$176);
-                  _el$176.$$click = () => startTopic();
-                  createRenderEffect(() => _el$176.disabled = !isConfigured || syncing());
-                  return _el$172;
+                  }), _el$178);
+                  _el$178.$$click = () => startTopic();
+                  createRenderEffect(() => _el$178.disabled = !isConfigured || syncing());
+                  return _el$174;
                 })();
               },
               get children() {
-                var _el$135 = _tmpl$47(),
-                  _el$136 = _el$135.firstChild,
-                  _el$137 = _el$136.firstChild,
+                var _el$137 = _tmpl$48(),
                   _el$138 = _el$137.firstChild,
-                  _el$140 = _el$137.nextSibling,
-                  _el$141 = _el$140.firstChild,
-                  _el$145 = _el$136.nextSibling,
-                  _el$155 = _el$145.firstChild;
-                  _el$155.firstChild;
-                  var _el$157 = _el$145.nextSibling;
-                insert(_el$137, createComponent(TopicMarker, {
+                  _el$139 = _el$138.firstChild,
+                  _el$140 = _el$139.firstChild,
+                  _el$142 = _el$139.nextSibling,
+                  _el$143 = _el$142.firstChild,
+                  _el$147 = _el$138.nextSibling,
+                  _el$157 = _el$147.firstChild;
+                  _el$157.firstChild;
+                  var _el$159 = _el$147.nextSibling;
+                insert(_el$139, createComponent(TopicMarker, {
                   get kind() {
                     return topic().kind;
                   }
-                }), _el$138);
-                insert(_el$137, () => topic().name, null);
-                insert(_el$136, createComponent(Show, {
+                }), _el$140);
+                insert(_el$139, () => topic().name, null);
+                insert(_el$138, createComponent(Show, {
                   get when() {
                     return !['note', 'list'].includes(topic().kind);
                   },
                   get children() {
-                    var _el$139 = _tmpl$40();
-                    insert(_el$139, () => topic().description);
-                    return _el$139;
+                    var _el$141 = _tmpl$41();
+                    insert(_el$141, () => topic().description);
+                    return _el$141;
                   }
-                }), _el$140);
-                insert(_el$135, createComponent(Show, {
+                }), _el$142);
+                insert(_el$137, createComponent(Show, {
                   get when() {
                     return error();
                   },
                   get children() {
-                    var _el$142 = _tmpl$3(),
-                      _el$143 = _el$142.firstChild,
-                      _el$144 = _el$143.nextSibling;
-                    insert(_el$142, error, _el$143);
-                    _el$144.$$click = () => setError('');
-                    return _el$142;
+                    var _el$144 = _tmpl$4(),
+                      _el$145 = _el$144.firstChild,
+                      _el$146 = _el$145.nextSibling;
+                    insert(_el$144, error, _el$145);
+                    _el$146.$$click = () => setError('');
+                    return _el$144;
                   }
-                }), _el$145);
-                insert(_el$145, createComponent(Show, {
+                }), _el$147);
+                insert(_el$147, createComponent(Show, {
                   get when() {
                     return projectsEnabled && returnProjectId();
                   },
                   get children() {
-                    var _el$146 = _tmpl$41();
-                    _el$146.$$click = () => selectProject(returnProjectId());
-                    return _el$146;
+                    var _el$148 = _tmpl$42();
+                    _el$148.$$click = () => selectProject(returnProjectId());
+                    return _el$148;
                   }
-                }), _el$155);
-                insert(_el$145, createComponent(Show, {
+                }), _el$157);
+                insert(_el$147, createComponent(Show, {
                   get when() {
                     return topics().find(item => item.id === topic().parentId);
                   },
                   children: parent => (() => {
-                    var _el$177 = _tmpl$49();
-                      _el$177.firstChild;
-                    _el$177.$$click = () => selectTopic(parent().id);
-                    insert(_el$177, () => parent().name, null);
-                    return _el$177;
+                    var _el$179 = _tmpl$50();
+                      _el$179.firstChild;
+                    _el$179.$$click = () => selectTopic(parent().id);
+                    insert(_el$179, () => parent().name, null);
+                    return _el$179;
                   })()
-                }), _el$155);
-                insert(_el$145, createComponent(Show, {
+                }), _el$157);
+                insert(_el$147, createComponent(Show, {
                   get when() {
                     return topic().kind !== 'discussion';
                   },
                   get children() {
-                    var _el$147 = _tmpl$43(),
-                      _el$148 = _el$147.firstChild,
-                      _el$149 = _el$148.nextSibling,
-                      _el$150 = _el$149.nextSibling,
-                      _el$151 = _el$150.nextSibling;
-                      _el$151.firstChild;
-                    insert(_el$149, topicMilestoneLabel);
-                    _el$151.addEventListener("change", event => {
+                    var _el$149 = _tmpl$44(),
+                      _el$150 = _el$149.firstChild,
+                      _el$151 = _el$150.nextSibling,
+                      _el$152 = _el$151.nextSibling,
+                      _el$153 = _el$152.nextSibling;
+                      _el$153.firstChild;
+                    insert(_el$151, topicMilestoneLabel);
+                    _el$153.addEventListener("change", event => {
                       const id = topic().id;
                       const next = event.currentTarget.value ? Number(event.currentTarget.value) : null;
                       event.currentTarget.value = String(topic().milestoneId ?? '');
                       assignMilestone(id, next);
                     });
-                    insert(_el$151, createComponent(Show, {
+                    insert(_el$153, createComponent(Show, {
                       get when() {
                         return memo(() => !!topic().milestoneId)() && !milestones().some(item => item.id === topic().milestoneId);
                       },
                       get children() {
-                        var _el$153 = _tmpl$42();
-                          _el$153.firstChild;
-                        insert(_el$153, () => topic().milestoneId, null);
-                        createRenderEffect(() => _el$153.value = topic().milestoneId);
-                        return _el$153;
+                        var _el$155 = _tmpl$43();
+                          _el$155.firstChild;
+                        insert(_el$155, () => topic().milestoneId, null);
+                        createRenderEffect(() => _el$155.value = topic().milestoneId);
+                        return _el$155;
                       }
                     }), null);
-                    insert(_el$151, createComponent(For, {
+                    insert(_el$153, createComponent(For, {
                       get each() {
                         return milestones();
                       },
                       children: item => (() => {
-                        var _el$179 = _tmpl$7();
-                        insert(_el$179, () => item.name, null);
-                        insert(_el$179, () => item.state === 'closed' ? ' (closed)' : '', null);
-                        createRenderEffect(() => _el$179.value = item.id);
-                        return _el$179;
+                        var _el$181 = _tmpl$8();
+                        insert(_el$181, () => item.name, null);
+                        insert(_el$181, () => item.state === 'closed' ? ' (closed)' : '', null);
+                        createRenderEffect(() => _el$181.value = item.id);
+                        return _el$181;
                       })()
                     }), null);
                     createRenderEffect(_p$ => {
                       var _v$57 = !!assignmentBusy()[topic().id],
                         _v$58 = topicMilestoneLabel(),
                         _v$59 = assignmentBusy()[topic().id] || !milestonesLoaded();
-                      _v$57 !== _p$.e && _el$147.classList.toggle("is-pending", _p$.e = _v$57);
-                      _v$58 !== _p$.t && setAttribute(_el$147, "title", _p$.t = _v$58);
-                      _v$59 !== _p$.a && (_el$151.disabled = _p$.a = _v$59);
+                      _v$57 !== _p$.e && _el$149.classList.toggle("is-pending", _p$.e = _v$57);
+                      _v$58 !== _p$.t && setAttribute(_el$149, "title", _p$.t = _v$58);
+                      _v$59 !== _p$.a && (_el$153.disabled = _p$.a = _v$59);
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined,
                       a: undefined
                     });
-                    createRenderEffect(() => _el$151.value = topic().milestoneId ?? '');
-                    return _el$147;
+                    createRenderEffect(() => _el$153.value = topic().milestoneId ?? '');
+                    return _el$149;
                   }
-                }), _el$155);
-                _el$155.$$click = () => requestStatusChange(topic());
-                insert(_el$155, () => statusLabel(topic().id) || (topic().state === 'open' ? 'Open' : 'Closed'), null);
-                insert(_el$157, createComponent(For, {
+                }), _el$157);
+                _el$157.$$click = () => requestStatusChange(topic());
+                insert(_el$157, () => statusLabel(topic().id) || (topic().state === 'open' ? 'Open' : 'Closed'), null);
+                insert(_el$159, createComponent(For, {
                   get each() {
                     return displayedTags();
                   },
                   children: tag => (() => {
-                    var _el$180 = _tmpl$50(),
-                      _el$181 = _el$180.firstChild,
-                      _el$182 = _el$181.nextSibling,
-                      _el$183 = _el$182.nextSibling;
-                    insert(_el$182, () => tag.name);
-                    _el$183.$$click = () => changeTag(topic().id, tag.name, 'remove');
+                    var _el$182 = _tmpl$51(),
+                      _el$183 = _el$182.firstChild,
+                      _el$184 = _el$183.nextSibling,
+                      _el$185 = _el$184.nextSibling;
+                    insert(_el$184, () => tag.name);
+                    _el$185.$$click = () => changeTag(topic().id, tag.name, 'remove');
                     createRenderEffect(_p$ => {
                       var _v$68 = !!(tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase()),
                         _v$69 = tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase(),
@@ -7169,13 +7232,13 @@ function Workspace(props) {
                         _v$72 = Boolean(tagOperations()[topic().id]),
                         _v$73 = `Remove tag ${tag.name}`,
                         _v$74 = `Remove tag ${tag.name}`;
-                      _v$68 !== _p$.e && _el$180.classList.toggle("is-pending", _p$.e = _v$68);
-                      _v$69 !== _p$.t && setAttribute(_el$180, "aria-busy", _p$.t = _v$69);
-                      _v$70 !== _p$.a && setAttribute(_el$180, "title", _p$.a = _v$70);
-                      _v$71 !== _p$.o && setStyleProperty(_el$181, "background", _p$.o = _v$71);
-                      _v$72 !== _p$.i && (_el$183.disabled = _p$.i = _v$72);
-                      _v$73 !== _p$.n && setAttribute(_el$183, "aria-label", _p$.n = _v$73);
-                      _v$74 !== _p$.s && setAttribute(_el$183, "title", _p$.s = _v$74);
+                      _v$68 !== _p$.e && _el$182.classList.toggle("is-pending", _p$.e = _v$68);
+                      _v$69 !== _p$.t && setAttribute(_el$182, "aria-busy", _p$.t = _v$69);
+                      _v$70 !== _p$.a && setAttribute(_el$182, "title", _p$.a = _v$70);
+                      _v$71 !== _p$.o && setStyleProperty(_el$183, "background", _p$.o = _v$71);
+                      _v$72 !== _p$.i && (_el$185.disabled = _p$.i = _v$72);
+                      _v$73 !== _p$.n && setAttribute(_el$185, "aria-label", _p$.n = _v$73);
+                      _v$74 !== _p$.s && setAttribute(_el$185, "title", _p$.s = _v$74);
                       return _p$;
                     }, {
                       e: undefined,
@@ -7186,201 +7249,201 @@ function Workspace(props) {
                       n: undefined,
                       s: undefined
                     });
-                    return _el$180;
+                    return _el$182;
                   })()
                 }), null);
-                insert(_el$157, createComponent(Show, {
+                insert(_el$159, createComponent(Show, {
                   get when() {
                     return tagEditing() === topic().id;
                   },
                   get fallback() {
                     return (() => {
-                      var _el$184 = _tmpl$51();
-                      _el$184.$$click = startTag;
-                      createRenderEffect(() => _el$184.disabled = Boolean(tagOperations()[topic().id]) || !isConfigured);
-                      return _el$184;
+                      var _el$186 = _tmpl$52();
+                      _el$186.$$click = startTag;
+                      createRenderEffect(() => _el$186.disabled = Boolean(tagOperations()[topic().id]) || !isConfigured);
+                      return _el$186;
                     })();
                   },
                   get children() {
-                    var _el$158 = _tmpl$44(),
-                      _el$159 = _el$158.firstChild,
-                      _el$160 = _el$159.nextSibling,
-                      _el$161 = _el$160.nextSibling,
-                      _el$162 = _el$161.nextSibling;
-                    _el$158.$$keydown = event => {
+                    var _el$160 = _tmpl$45(),
+                      _el$161 = _el$160.firstChild,
+                      _el$162 = _el$161.nextSibling,
+                      _el$163 = _el$162.nextSibling,
+                      _el$164 = _el$163.nextSibling;
+                    _el$160.$$keydown = event => {
                       if (event.key === 'Escape') {
                         event.preventDefault();
                         setTagEditing(null);
                       }
                     };
-                    _el$158.addEventListener("submit", event => {
+                    _el$160.addEventListener("submit", event => {
                       event.preventDefault();
                       changeTag(topic().id, tagDrafts()[topic().id] || '', 'add');
                     });
-                    _el$159.$$input = event => setTagDrafts(previous => ({
+                    _el$161.$$input = event => setTagDrafts(previous => ({
                       ...previous,
                       [topic().id]: event.currentTarget.value
                     }));
-                    use(element => requestAnimationFrame(() => element.focus()), _el$159);
-                    insert(_el$160, createComponent(For, {
+                    use(element => requestAnimationFrame(() => element.focus()), _el$161);
+                    insert(_el$162, createComponent(For, {
                       get each() {
                         return knownTags().filter(tag => !topic().tags.some(entry => entry.name.toLowerCase() === tag.name.toLowerCase()));
                       },
                       children: tag => (() => {
-                        var _el$185 = _tmpl$7();
-                        createRenderEffect(() => _el$185.value = tag.name);
-                        return _el$185;
+                        var _el$187 = _tmpl$8();
+                        createRenderEffect(() => _el$187.value = tag.name);
+                        return _el$187;
                       })()
                     }));
-                    _el$162.$$click = () => setTagEditing(null);
-                    createRenderEffect(() => _el$161.disabled = !(tagDrafts()[topic().id] || '').trim());
-                    createRenderEffect(() => _el$159.value = tagDrafts()[topic().id] || '');
-                    return _el$158;
+                    _el$164.$$click = () => setTagEditing(null);
+                    createRenderEffect(() => _el$163.disabled = !(tagDrafts()[topic().id] || '').trim());
+                    createRenderEffect(() => _el$161.value = tagDrafts()[topic().id] || '');
+                    return _el$160;
                   }
                 }), null);
-                insert(_el$135, createComponent(Show, {
+                insert(_el$137, createComponent(Show, {
                   get when() {
                     return !['note', 'list'].includes(topic().kind);
                   },
                   get children() {
                     return [(() => {
-                      var _el$163 = _tmpl$45();
+                      var _el$165 = _tmpl$46();
                       var _ref$6 = messageList;
-                      typeof _ref$6 === "function" ? use(_ref$6, _el$163) : messageList = _el$163;
-                      insert(_el$163, createComponent(For, {
+                      typeof _ref$6 === "function" ? use(_ref$6, _el$165) : messageList = _el$165;
+                      insert(_el$165, createComponent(For, {
                         get each() {
                           return currentMessages();
                         },
                         children: message => (() => {
-                          var _el$186 = _tmpl$53(),
-                            _el$187 = _el$186.firstChild,
-                            _el$188 = _el$187.nextSibling,
+                          var _el$188 = _tmpl$54(),
                             _el$189 = _el$188.firstChild,
-                            _el$190 = _el$189.firstChild,
-                            _el$191 = _el$190.nextSibling,
-                            _el$194 = _el$189.nextSibling,
-                            _el$195 = _el$194.firstChild,
-                            _el$196 = _el$195.nextSibling;
-                          insert(_el$187, () => (message.sender || message.author).slice(0, 1));
-                          insert(_el$190, () => message.sender || message.author);
-                          insert(_el$191, () => formatTime(message.time));
-                          insert(_el$188, createComponent(Show, {
+                            _el$190 = _el$189.nextSibling,
+                            _el$191 = _el$190.firstChild,
+                            _el$192 = _el$191.firstChild,
+                            _el$193 = _el$192.nextSibling,
+                            _el$196 = _el$191.nextSibling,
+                            _el$197 = _el$196.firstChild,
+                            _el$198 = _el$197.nextSibling;
+                          insert(_el$189, () => (message.sender || message.author).slice(0, 1));
+                          insert(_el$192, () => message.sender || message.author);
+                          insert(_el$193, () => formatTime(message.time));
+                          insert(_el$190, createComponent(Show, {
                             get when() {
                               return message.replyTo;
                             },
                             get children() {
-                              var _el$192 = _tmpl$52();
-                                _el$192.firstChild;
-                              insert(_el$192, () => message.replyTo.author, null);
-                              createRenderEffect(() => setAttribute(_el$192, "href", message.replyTo.url));
-                              return _el$192;
+                              var _el$194 = _tmpl$53();
+                                _el$194.firstChild;
+                              insert(_el$194, () => message.replyTo.author, null);
+                              createRenderEffect(() => setAttribute(_el$194, "href", message.replyTo.url));
+                              return _el$194;
                             }
-                          }), _el$194);
-                          insert(_el$188, createComponent(MessageText, {
+                          }), _el$196);
+                          insert(_el$190, createComponent(MessageText, {
                             get text() {
                               return message.text;
                             }
-                          }), _el$194);
-                          insert(_el$194, createComponent(For, {
+                          }), _el$196);
+                          insert(_el$196, createComponent(For, {
                             get each() {
                               return message.reactions;
                             },
                             children: type => (() => {
-                              var _el$197 = _tmpl$54();
-                              insert(_el$197, () => reactionSymbols[type][0]);
+                              var _el$199 = _tmpl$55();
+                              insert(_el$199, () => reactionSymbols[type][0]);
                               createRenderEffect(_p$ => {
                                 var _v$78 = reactionSymbols[type][1],
                                   _v$79 = reactionSymbols[type][1];
-                                _v$78 !== _p$.e && setAttribute(_el$197, "aria-label", _p$.e = _v$78);
-                                _v$79 !== _p$.t && setAttribute(_el$197, "title", _p$.t = _v$79);
+                                _v$78 !== _p$.e && setAttribute(_el$199, "aria-label", _p$.e = _v$78);
+                                _v$79 !== _p$.t && setAttribute(_el$199, "title", _p$.t = _v$79);
                                 return _p$;
                               }, {
                                 e: undefined,
                                 t: undefined
                               });
-                              return _el$197;
+                              return _el$199;
                             })()
-                          }), _el$195);
-                          _el$195.$$click = () => openReactions(message.id);
-                          _el$196.$$click = () => replyTo(message);
+                          }), _el$197);
+                          _el$197.$$click = () => openReactions(message.id);
+                          _el$198.$$click = () => replyTo(message);
                           createRenderEffect(_p$ => {
                             var _v$75 = !!(message.author === 'You'),
                               _v$76 = message.sender ? `Declared sender: ${message.sender} · GitHub author: ${message.author}` : message.author,
                               _v$77 = message.time.toISOString();
-                            _v$75 !== _p$.e && _el$187.classList.toggle("avatar-you", _p$.e = _v$75);
-                            _v$76 !== _p$.t && setAttribute(_el$190, "title", _p$.t = _v$76);
-                            _v$77 !== _p$.a && setAttribute(_el$191, "datetime", _p$.a = _v$77);
+                            _v$75 !== _p$.e && _el$189.classList.toggle("avatar-you", _p$.e = _v$75);
+                            _v$76 !== _p$.t && setAttribute(_el$192, "title", _p$.t = _v$76);
+                            _v$77 !== _p$.a && setAttribute(_el$193, "datetime", _p$.a = _v$77);
                             return _p$;
                           }, {
                             e: undefined,
                             t: undefined,
                             a: undefined
                           });
-                          return _el$186;
+                          return _el$188;
                         })()
                       }), null);
-                      insert(_el$163, createComponent(Show, {
+                      insert(_el$165, createComponent(Show, {
                         get when() {
                           return outgoing();
                         },
                         children: entry => (() => {
-                          var _el$198 = _tmpl$55(),
-                            _el$199 = _el$198.firstChild,
-                            _el$200 = _el$199.nextSibling,
+                          var _el$200 = _tmpl$56(),
                             _el$201 = _el$200.firstChild,
-                            _el$202 = _el$201.firstChild,
-                            _el$203 = _el$202.nextSibling;
-                          insert(_el$203, () => entry().state === 'pending' ? 'Sending…' : 'Delivery unconfirmed — check GitHub before resending');
-                          insert(_el$200, createComponent(MessageText, {
+                            _el$202 = _el$201.nextSibling,
+                            _el$203 = _el$202.firstChild,
+                            _el$204 = _el$203.firstChild,
+                            _el$205 = _el$204.nextSibling;
+                          insert(_el$205, () => entry().state === 'pending' ? 'Sending…' : 'Delivery unconfirmed — check GitHub before resending');
+                          insert(_el$202, createComponent(MessageText, {
                             get text() {
                               return entry().text;
                             }
                           }), null);
-                          createRenderEffect(() => setAttribute(_el$198, "aria-busy", entry().state === 'pending'));
-                          return _el$198;
+                          createRenderEffect(() => setAttribute(_el$200, "aria-busy", entry().state === 'pending'));
+                          return _el$200;
                         })()
                       }), null);
-                      return _el$163;
+                      return _el$165;
                     })(), (() => {
-                      var _el$164 = _tmpl$46(),
-                        _el$165 = _el$164.firstChild,
-                        _el$166 = _el$165.firstChild,
-                        _el$167 = _el$166.nextSibling,
-                        _el$168 = _el$165.nextSibling,
-                        _el$169 = _el$168.firstChild,
-                        _el$170 = _el$169.nextSibling,
-                        _el$171 = _el$170.firstChild;
-                      _el$164.addEventListener("submit", sendMessage);
-                      _el$166.$$keydown = event => {
+                      var _el$166 = _tmpl$47(),
+                        _el$167 = _el$166.firstChild,
+                        _el$168 = _el$167.firstChild,
+                        _el$169 = _el$168.nextSibling,
+                        _el$170 = _el$167.nextSibling,
+                        _el$171 = _el$170.firstChild,
+                        _el$172 = _el$171.nextSibling,
+                        _el$173 = _el$172.firstChild;
+                      _el$166.addEventListener("submit", sendMessage);
+                      _el$168.$$keydown = event => {
                         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) sendMessage(event);
                       };
-                      _el$166.$$input = event => setDrafts(previous => ({
+                      _el$168.$$input = event => setDrafts(previous => ({
                         ...previous,
                         [activeId()]: event.currentTarget.value
                       }));
                       var _ref$7 = composerInput;
-                      typeof _ref$7 === "function" ? use(_ref$7, _el$166) : composerInput = _el$166;
-                      insert(_el$170, GITHUB_OWNER, _el$171);
-                      insert(_el$170, GITHUB_REPO, null);
+                      typeof _ref$7 === "function" ? use(_ref$7, _el$168) : composerInput = _el$168;
+                      insert(_el$172, GITHUB_OWNER, _el$173);
+                      insert(_el$172, GITHUB_REPO, null);
                       createRenderEffect(_p$ => {
                         var _v$60 = `Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`,
                           _v$61 = `Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`,
                           _v$62 = Boolean(outgoing());
-                        _v$60 !== _p$.e && setAttribute(_el$166, "aria-label", _p$.e = _v$60);
-                        _v$61 !== _p$.t && setAttribute(_el$166, "placeholder", _p$.t = _v$61);
-                        _v$62 !== _p$.a && (_el$167.disabled = _p$.a = _v$62);
+                        _v$60 !== _p$.e && setAttribute(_el$168, "aria-label", _p$.e = _v$60);
+                        _v$61 !== _p$.t && setAttribute(_el$168, "placeholder", _p$.t = _v$61);
+                        _v$62 !== _p$.a && (_el$169.disabled = _p$.a = _v$62);
                         return _p$;
                       }, {
                         e: undefined,
                         t: undefined,
                         a: undefined
                       });
-                      createRenderEffect(() => _el$166.value = draft());
-                      return _el$164;
+                      createRenderEffect(() => _el$168.value = draft());
+                      return _el$166;
                     })()];
                   }
                 }), null);
-                insert(_el$135, createComponent(Show, {
+                insert(_el$137, createComponent(Show, {
                   get when() {
                     return memo(() => topic().kind === 'note')() ? topic().id : null;
                   },
@@ -7400,7 +7463,7 @@ function Workspace(props) {
                     })
                   })
                 }), null);
-                insert(_el$135, createComponent(Show, {
+                insert(_el$137, createComponent(Show, {
                   get when() {
                     return memo(() => topic().kind === 'list')() ? topic().id : null;
                   },
@@ -7426,11 +7489,11 @@ function Workspace(props) {
                     _v$65 = !!(topic().state === 'closed'),
                     _v$66 = Boolean(closing()[topic().id]),
                     _v$67 = `${topic().state === 'open' ? 'Open' : 'Closed'} topic: ${topic().state === 'open' ? 'close' : 'reopen'} ${topic().name}`;
-                  _v$63 !== _p$.e && setAttribute(_el$135, "aria-label", _p$.e = _v$63);
-                  _v$64 !== _p$.t && setAttribute(_el$141, "href", _p$.t = _v$64);
-                  _v$65 !== _p$.a && _el$155.classList.toggle("is-closed", _p$.a = _v$65);
-                  _v$66 !== _p$.o && (_el$155.disabled = _p$.o = _v$66);
-                  _v$67 !== _p$.i && setAttribute(_el$155, "aria-label", _p$.i = _v$67);
+                  _v$63 !== _p$.e && setAttribute(_el$137, "aria-label", _p$.e = _v$63);
+                  _v$64 !== _p$.t && setAttribute(_el$143, "href", _p$.t = _v$64);
+                  _v$65 !== _p$.a && _el$157.classList.toggle("is-closed", _p$.a = _v$65);
+                  _v$66 !== _p$.o && (_el$157.disabled = _p$.o = _v$66);
+                  _v$67 !== _p$.i && setAttribute(_el$157, "aria-label", _p$.i = _v$67);
                   return _p$;
                 }, {
                   e: undefined,
@@ -7439,7 +7502,7 @@ function Workspace(props) {
                   o: undefined,
                   i: undefined
                 });
-                return _el$135;
+                return _el$137;
               }
             });
           }
@@ -7461,69 +7524,69 @@ function Workspace(props) {
           parentId: topics().find(topic => topic.id === updated.id)?.parentId ?? null
         })
       })
-    }), _el$92);
-    _el$92.addEventListener("cancel", event => {
+    }), _el$94);
+    _el$94.addEventListener("cancel", event => {
       if (milestoneSaving()) event.preventDefault();
     });
-    _el$92.$$click = event => dismissBackdrop(event, milestoneSaving());
-    _el$92.$$pointerdown = trackBackdrop;
+    _el$94.$$click = event => dismissBackdrop(event, milestoneSaving());
+    _el$94.$$pointerdown = trackBackdrop;
     var _ref$2 = milestoneDialog;
-    typeof _ref$2 === "function" ? use(_ref$2, _el$92) : milestoneDialog = _el$92;
-    _el$93.addEventListener("submit", saveMilestone);
-    insert(_el$94, () => milestoneEditing() ? 'Edit goal' : 'New goal');
-    _el$96.$$input = event => setMilestoneName(event.currentTarget.value);
-    _el$98.$$input = event => setMilestoneDescription(event.currentTarget.value);
-    _el$100.$$input = event => setMilestoneDueDate(event.currentTarget.value);
-    insert(_el$93, createComponent(Show, {
+    typeof _ref$2 === "function" ? use(_ref$2, _el$94) : milestoneDialog = _el$94;
+    _el$95.addEventListener("submit", saveMilestone);
+    insert(_el$96, () => milestoneEditing() ? 'Edit goal' : 'New goal');
+    _el$98.$$input = event => setMilestoneName(event.currentTarget.value);
+    _el$100.$$input = event => setMilestoneDescription(event.currentTarget.value);
+    _el$102.$$input = event => setMilestoneDueDate(event.currentTarget.value);
+    insert(_el$95, createComponent(Show, {
       get when() {
         return milestoneFormError();
       },
       get children() {
-        var _el$101 = _tmpl$26();
-        insert(_el$101, milestoneFormError);
-        return _el$101;
+        var _el$103 = _tmpl$27();
+        insert(_el$103, milestoneFormError);
+        return _el$103;
       }
-    }), _el$102);
-    _el$103.$$click = () => milestoneDialog.close();
-    insert(_el$104, (() => {
+    }), _el$104);
+    _el$105.$$click = () => milestoneDialog.close();
+    insert(_el$106, (() => {
       var _c$2 = memo(() => !!milestoneSaving());
       return () => _c$2() ? 'Saving…' : milestoneEditing() ? 'Save' : 'Create';
     })());
-    _el$105.addEventListener("close", () => {
+    _el$107.addEventListener("close", () => {
       setStatusChange(null);
       setStatusError('');
     });
-    _el$105.addEventListener("cancel", event => {
+    _el$107.addEventListener("cancel", event => {
       if (statusPending()) event.preventDefault();
     });
-    _el$105.$$click = event => dismissBackdrop(event, statusPending());
-    _el$105.$$pointerdown = trackBackdrop;
+    _el$107.$$click = event => dismissBackdrop(event, statusPending());
+    _el$107.$$pointerdown = trackBackdrop;
     var _ref$3 = statusDialog;
-    typeof _ref$3 === "function" ? use(_ref$3, _el$105) : statusDialog = _el$105;
-    insert(_el$105, createComponent(Show, {
+    typeof _ref$3 === "function" ? use(_ref$3, _el$107) : statusDialog = _el$107;
+    insert(_el$107, createComponent(Show, {
       get when() {
         return statusChange();
       },
       children: change => (() => {
-        var _el$204 = _tmpl$56(),
-          _el$205 = _el$204.firstChild,
-          _el$207 = _el$205.nextSibling,
-          _el$208 = _el$207.firstChild,
-          _el$209 = _el$208.nextSibling;
-        _el$204.addEventListener("submit", confirmStatusChange);
-        insert(_el$205, () => change().target === 'closed' ? 'Close this topic?' : 'Reopen this topic?');
-        insert(_el$204, createComponent(Show, {
+        var _el$206 = _tmpl$57(),
+          _el$207 = _el$206.firstChild,
+          _el$209 = _el$207.nextSibling,
+          _el$210 = _el$209.firstChild,
+          _el$211 = _el$210.nextSibling;
+        _el$206.addEventListener("submit", confirmStatusChange);
+        insert(_el$207, () => change().target === 'closed' ? 'Close this topic?' : 'Reopen this topic?');
+        insert(_el$206, createComponent(Show, {
           get when() {
             return statusError();
           },
           get children() {
-            var _el$206 = _tmpl$26();
-            insert(_el$206, statusError);
-            return _el$206;
+            var _el$208 = _tmpl$27();
+            insert(_el$208, statusError);
+            return _el$208;
           }
-        }), _el$207);
-        _el$208.$$click = () => statusDialog.close();
-        insert(_el$209, (() => {
+        }), _el$209);
+        _el$210.$$click = () => statusDialog.close();
+        insert(_el$211, (() => {
           var _c$3 = memo(() => !!statusPending());
           return () => _c$3() ? statusLabel(change().id) : change().target === 'closed' ? 'Close topic' : 'Reopen topic';
         })());
@@ -7531,49 +7594,49 @@ function Workspace(props) {
           var _v$80 = statusPending(),
             _v$81 = statusPending(),
             _v$82 = Boolean(closing()[change().id]);
-          _v$80 !== _p$.e && setAttribute(_el$204, "aria-busy", _p$.e = _v$80);
-          _v$81 !== _p$.t && (_el$208.disabled = _p$.t = _v$81);
-          _v$82 !== _p$.a && (_el$209.disabled = _p$.a = _v$82);
+          _v$80 !== _p$.e && setAttribute(_el$206, "aria-busy", _p$.e = _v$80);
+          _v$81 !== _p$.t && (_el$210.disabled = _p$.t = _v$81);
+          _v$82 !== _p$.a && (_el$211.disabled = _p$.a = _v$82);
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$204;
+        return _el$206;
       })()
     }));
-    _el$106.addEventListener("close", () => {
+    _el$108.addEventListener("close", () => {
       reactionLoadVersion++;
       setReactionTarget(null);
       setReactionLoading(false);
     });
-    _el$106.addEventListener("cancel", event => {
+    _el$108.addEventListener("cancel", event => {
       if (reactionBusy()) event.preventDefault();
     });
-    _el$106.$$click = event => dismissBackdrop(event, reactionBusy());
-    _el$106.$$pointerdown = trackBackdrop;
+    _el$108.$$click = event => dismissBackdrop(event, reactionBusy());
+    _el$108.$$pointerdown = trackBackdrop;
     var _ref$4 = reactionDialog;
-    typeof _ref$4 === "function" ? use(_ref$4, _el$106) : reactionDialog = _el$106;
-    insert(_el$108, createComponent(For, {
+    typeof _ref$4 === "function" ? use(_ref$4, _el$108) : reactionDialog = _el$108;
+    insert(_el$110, createComponent(For, {
       get each() {
         return Object.keys(reactionSymbols);
       },
       children: type => (() => {
-        var _el$210 = _tmpl$57();
-        _el$210.$$click = () => toggleReaction(type);
-        insert(_el$210, () => reactionSymbols[type][0]);
+        var _el$212 = _tmpl$58();
+        _el$212.$$click = () => toggleReaction(type);
+        insert(_el$212, () => reactionSymbols[type][0]);
         createRenderEffect(_p$ => {
           var _v$83 = !!Boolean(ownReaction(type)),
             _v$84 = Boolean(ownReaction(type)),
             _v$85 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
             _v$86 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
             _v$87 = reactionLoading() || reactionBusy() || !reactionViewer();
-          _v$83 !== _p$.e && _el$210.classList.toggle("is-selected", _p$.e = _v$83);
-          _v$84 !== _p$.t && setAttribute(_el$210, "aria-pressed", _p$.t = _v$84);
-          _v$85 !== _p$.a && setAttribute(_el$210, "aria-label", _p$.a = _v$85);
-          _v$86 !== _p$.o && setAttribute(_el$210, "title", _p$.o = _v$86);
-          _v$87 !== _p$.i && (_el$210.disabled = _p$.i = _v$87);
+          _v$83 !== _p$.e && _el$212.classList.toggle("is-selected", _p$.e = _v$83);
+          _v$84 !== _p$.t && setAttribute(_el$212, "aria-pressed", _p$.t = _v$84);
+          _v$85 !== _p$.a && setAttribute(_el$212, "aria-label", _p$.a = _v$85);
+          _v$86 !== _p$.o && setAttribute(_el$212, "title", _p$.o = _v$86);
+          _v$87 !== _p$.i && (_el$212.disabled = _p$.i = _v$87);
           return _p$;
         }, {
           e: undefined,
@@ -7582,115 +7645,115 @@ function Workspace(props) {
           o: undefined,
           i: undefined
         });
-        return _el$210;
+        return _el$212;
       })()
     }));
-    insert(_el$106, createComponent(Show, {
+    insert(_el$108, createComponent(Show, {
       get when() {
         return reactionLoading() || reactionBusy();
       },
       get children() {
-        var _el$109 = _tmpl$27();
-        insert(_el$109, () => reactionLoading() ? 'Loading…' : 'Saving…');
-        return _el$109;
+        var _el$111 = _tmpl$28();
+        insert(_el$111, () => reactionLoading() ? 'Loading…' : 'Saving…');
+        return _el$111;
       }
-    }), _el$111);
-    insert(_el$106, createComponent(Show, {
+    }), _el$113);
+    insert(_el$108, createComponent(Show, {
       get when() {
         return reactionError();
       },
       get children() {
-        var _el$110 = _tmpl$26();
-        insert(_el$110, reactionError);
-        return _el$110;
+        var _el$112 = _tmpl$27();
+        insert(_el$112, reactionError);
+        return _el$112;
       }
-    }), _el$111);
-    _el$112.$$click = () => reactionDialog.close();
-    _el$113.addEventListener("close", () => {
+    }), _el$113);
+    _el$114.$$click = () => reactionDialog.close();
+    _el$115.addEventListener("close", () => {
       setRemoveTarget(null);
       setRemoveError('');
       setConfirmDelete(false);
     });
-    _el$113.addEventListener("cancel", event => {
+    _el$115.addEventListener("cancel", event => {
       if (removalPending()) event.preventDefault();
     });
-    _el$113.$$click = event => dismissBackdrop(event, removalPending());
-    _el$113.$$pointerdown = trackBackdrop;
+    _el$115.$$click = event => dismissBackdrop(event, removalPending());
+    _el$115.$$pointerdown = trackBackdrop;
     var _ref$5 = removeDialog;
-    typeof _ref$5 === "function" ? use(_ref$5, _el$113) : removeDialog = _el$113;
-    insert(_el$113, createComponent(Show, {
+    typeof _ref$5 === "function" ? use(_ref$5, _el$115) : removeDialog = _el$115;
+    insert(_el$115, createComponent(Show, {
       get when() {
         return removeTarget();
       },
       children: item => (() => {
-        var _el$211 = _tmpl$60(),
-          _el$212 = _el$211.firstChild,
-          _el$215 = _el$212.nextSibling;
-        insert(_el$212, (() => {
+        var _el$213 = _tmpl$61(),
+          _el$214 = _el$213.firstChild,
+          _el$217 = _el$214.nextSibling;
+        insert(_el$214, (() => {
           var _c$4 = memo(() => !!confirmDelete());
           return () => _c$4() ? 'Permanently Delete?' : `Remove ${item().name}`;
         })());
-        insert(_el$211, createComponent(Show, {
+        insert(_el$213, createComponent(Show, {
           get when() {
             return removeError();
           },
           get children() {
-            var _el$213 = _tmpl$26();
-            insert(_el$213, removeError);
-            return _el$213;
+            var _el$215 = _tmpl$27();
+            insert(_el$215, removeError);
+            return _el$215;
           }
-        }), _el$215);
-        insert(_el$211, createComponent(Show, {
+        }), _el$217);
+        insert(_el$213, createComponent(Show, {
           get when() {
             return removalPending();
           },
           get children() {
-            var _el$214 = _tmpl$27();
-            insert(_el$214, () => statusLabel(item().id));
-            return _el$214;
+            var _el$216 = _tmpl$28();
+            insert(_el$216, () => statusLabel(item().id));
+            return _el$216;
           }
-        }), _el$215);
-        insert(_el$215, createComponent(Show, {
+        }), _el$217);
+        insert(_el$217, createComponent(Show, {
           get when() {
             return confirmDelete();
           },
           get fallback() {
             return [(() => {
-              var _el$218 = _tmpl$61();
-              _el$218.$$click = () => confirmRemoval('archived');
-              createRenderEffect(() => _el$218.disabled = Boolean(closing()[item().id]));
-              return _el$218;
-            })(), (() => {
-              var _el$219 = _tmpl$62();
-              _el$219.$$click = () => setConfirmDelete(true);
-              createRenderEffect(() => _el$219.disabled = Boolean(closing()[item().id]));
-              return _el$219;
-            })(), (() => {
-              var _el$220 = _tmpl$63();
-              _el$220.$$click = () => removeDialog.close();
-              createRenderEffect(() => _el$220.disabled = removalPending());
+              var _el$220 = _tmpl$62();
+              _el$220.$$click = () => confirmRemoval('archived');
+              createRenderEffect(() => _el$220.disabled = Boolean(closing()[item().id]));
               return _el$220;
+            })(), (() => {
+              var _el$221 = _tmpl$63();
+              _el$221.$$click = () => setConfirmDelete(true);
+              createRenderEffect(() => _el$221.disabled = Boolean(closing()[item().id]));
+              return _el$221;
+            })(), (() => {
+              var _el$222 = _tmpl$64();
+              _el$222.$$click = () => removeDialog.close();
+              createRenderEffect(() => _el$222.disabled = removalPending());
+              return _el$222;
             })()];
           },
           get children() {
             return [(() => {
-              var _el$216 = _tmpl$58();
-              _el$216.$$click = () => confirmRemoval('deleted');
-              createRenderEffect(() => _el$216.disabled = Boolean(closing()[item().id]));
-              return _el$216;
+              var _el$218 = _tmpl$59();
+              _el$218.$$click = () => confirmRemoval('deleted');
+              createRenderEffect(() => _el$218.disabled = Boolean(closing()[item().id]));
+              return _el$218;
             })(), (() => {
-              var _el$217 = _tmpl$59();
-              _el$217.$$click = () => {
+              var _el$219 = _tmpl$60();
+              _el$219.$$click = () => {
                 setConfirmDelete(false);
                 setRemoveError('');
               };
-              createRenderEffect(() => _el$217.disabled = removalPending());
-              return _el$217;
+              createRenderEffect(() => _el$219.disabled = removalPending());
+              return _el$219;
             })()];
           }
         }));
-        createRenderEffect(() => setAttribute(_el$211, "aria-busy", removalPending()));
-        return _el$211;
+        createRenderEffect(() => setAttribute(_el$213, "aria-busy", removalPending()));
+        return _el$213;
       })()
     }));
     createRenderEffect(_p$ => {
@@ -7711,23 +7774,23 @@ function Workspace(props) {
         _v$34 = milestoneSaving() || milestoneUncertain() || !milestoneName().trim(),
         _v$35 = reactionLoading() || reactionBusy(),
         _v$36 = reactionBusy();
-      _v$20 !== _p$.e && setAttribute(_el$54, "aria-expanded", _p$.e = _v$20);
-      _v$21 !== _p$.t && _el$81.classList.toggle("is-expanded", _p$.t = _v$21);
-      _v$22 !== _p$.a && setAttribute(_el$82, "aria-expanded", _p$.a = _v$22);
-      _v$23 !== _p$.o && setAttribute(_el$85, "d", _p$.o = _v$23);
-      _v$24 !== _p$.i && (_el$86.hidden = _p$.i = _v$24);
-      _v$25 !== _p$.n && _el$91.classList.toggle("is-connected", _p$.n = _v$25);
-      _v$26 !== _p$.s && _el$91.classList.toggle("is-syncing", _p$.s = _v$26);
-      _v$27 !== _p$.h && setAttribute(_el$91, "aria-label", _p$.h = _v$27);
-      _v$28 !== _p$.r && setAttribute(_el$91, "title", _p$.r = _v$28);
-      _v$29 !== _p$.d && setAttribute(_el$93, "aria-busy", _p$.d = _v$29);
-      _v$30 !== _p$.l && (_el$96.disabled = _p$.l = _v$30);
-      _v$31 !== _p$.u && (_el$98.disabled = _p$.u = _v$31);
-      _v$32 !== _p$.c && (_el$100.disabled = _p$.c = _v$32);
-      _v$33 !== _p$.w && (_el$103.disabled = _p$.w = _v$33);
-      _v$34 !== _p$.m && (_el$104.disabled = _p$.m = _v$34);
-      _v$35 !== _p$.f && setAttribute(_el$108, "aria-busy", _p$.f = _v$35);
-      _v$36 !== _p$.y && (_el$112.disabled = _p$.y = _v$36);
+      _v$20 !== _p$.e && setAttribute(_el$56, "aria-expanded", _p$.e = _v$20);
+      _v$21 !== _p$.t && _el$83.classList.toggle("is-expanded", _p$.t = _v$21);
+      _v$22 !== _p$.a && setAttribute(_el$84, "aria-expanded", _p$.a = _v$22);
+      _v$23 !== _p$.o && setAttribute(_el$87, "d", _p$.o = _v$23);
+      _v$24 !== _p$.i && (_el$88.hidden = _p$.i = _v$24);
+      _v$25 !== _p$.n && _el$93.classList.toggle("is-connected", _p$.n = _v$25);
+      _v$26 !== _p$.s && _el$93.classList.toggle("is-syncing", _p$.s = _v$26);
+      _v$27 !== _p$.h && setAttribute(_el$93, "aria-label", _p$.h = _v$27);
+      _v$28 !== _p$.r && setAttribute(_el$93, "title", _p$.r = _v$28);
+      _v$29 !== _p$.d && setAttribute(_el$95, "aria-busy", _p$.d = _v$29);
+      _v$30 !== _p$.l && (_el$98.disabled = _p$.l = _v$30);
+      _v$31 !== _p$.u && (_el$100.disabled = _p$.u = _v$31);
+      _v$32 !== _p$.c && (_el$102.disabled = _p$.c = _v$32);
+      _v$33 !== _p$.w && (_el$105.disabled = _p$.w = _v$33);
+      _v$34 !== _p$.m && (_el$106.disabled = _p$.m = _v$34);
+      _v$35 !== _p$.f && setAttribute(_el$110, "aria-busy", _p$.f = _v$35);
+      _v$36 !== _p$.y && (_el$114.disabled = _p$.y = _v$36);
       return _p$;
     }, {
       e: undefined,
@@ -7748,10 +7811,10 @@ function Workspace(props) {
       f: undefined,
       y: undefined
     });
-    createRenderEffect(() => _el$96.value = milestoneName());
-    createRenderEffect(() => _el$98.value = milestoneDescription());
-    createRenderEffect(() => _el$100.value = milestoneDueDate());
-    return _el$51;
+    createRenderEffect(() => _el$98.value = milestoneName());
+    createRenderEffect(() => _el$100.value = milestoneDescription());
+    createRenderEffect(() => _el$102.value = milestoneDueDate());
+    return _el$53;
   })();
 }
 delegateEvents(["click", "keydown", "input", "pointerdown"]);
@@ -7760,8 +7823,8 @@ delegateEvents(["click", "keydown", "input", "pointerdown"]);
 const ENABLE_DISCUSSIONS = false;
 // Optional GitHub Projects integration.
 const ENABLE_PROJECTS = false;
-// Public default only. Credentials are entered at runtime through Permit.
-const DEFAULT_REPOSITORY = "" || repositoryFromPagesUrl(window.location.href) || 'orazdow/Blackboard';
+// Public repository selection only. Credentials are entered at runtime.
+const DEFAULT_REPOSITORY = defaultRepositoryForUrl(window.location.href, "");
 render(() => App({
   discussionsEnabled: ENABLE_DISCUSSIONS,
   projectsEnabled: ENABLE_PROJECTS,

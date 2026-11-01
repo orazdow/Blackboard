@@ -25,8 +25,8 @@ export default function RepositorySelector(props) {
   function openPermit(repository = props.repository, connecting = false, connectedName = '') {
     if (props.switchDisabled) return;
     attempt++; setOpen(false); setBusy(false); setError(''); setValidated(null); tokensEdited = false;
-    const saved = props.getCredentials(repository);
-    setAddress(connecting ? connectedName : repositoryName(repository));
+    const saved = repository ? props.getCredentials(repository) : null;
+    setAddress(connecting ? connectedName : (repository ? repositoryName(repository) : ''));
     setToken(saved?.token || (connecting ? props.credentials?.token : '') || '');
     setProjectToken(saved?.projectToken || (props.projectsEnabled && connecting ? props.credentials?.projectToken : '') || '');
     setRemember(saved?.remember ?? true);
@@ -96,17 +96,17 @@ export default function RepositorySelector(props) {
   }
 
   return <header ref={element} class="workspace-header repository-header">
-    <button ref={trigger} type="button" class="repository-trigger" title={repositoryName(props.repository)} aria-label={`Repository ${repositoryName(props.repository)}`} aria-expanded={open()} aria-controls="repository-menu"
+    <button ref={trigger} type="button" class="repository-trigger" title={props.repository ? repositoryName(props.repository) : 'Connect repository'} aria-label={props.repository ? `Repository ${repositoryName(props.repository)}` : 'Connect repository'} aria-expanded={open()} aria-controls="repository-menu"
       onClick={() => { if (open()) closeMenu(); else setOpen(true); }}>
       <img class="workspace-icon" src="./lyra.jpg" alt="" />
-      <span class="repository-heading"><span class="repository-title">{props.repository.repo || 'Connect repository'}</span><span class="muted">{props.repository.owner || 'Blackboard'}</span></span>
+      <span class="repository-heading"><span class="repository-title">{props.repository?.repo || 'Connect repository'}</span><span class="muted">{props.repository?.owner || 'Blackboard'}</span></span>
       <svg class="repository-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
     </button>
     <Show when={open()}><div id="repository-menu" class="repository-menu" aria-label="Repository selection" aria-busy={busy()}>
-      <div class="repository-current">
+      <Show when={props.repository}><div class="repository-current">
         <span title={repositoryName(props.repository)}>{repositoryName(props.repository)}</span>
         <button type="button" class="repository-permit" disabled={busy() || props.switchDisabled} aria-haspopup="dialog" onClick={() => openPermit()}>{props.permitted ? 'Permitted' : 'Permit'}</button>
-      </div>
+      </div></Show>
       <Show when={props.recentRepositories?.length}>
         <div class="repository-recents" role="group" aria-label="Recent repositories">
           <For each={props.recentRepositories}>{(repository) =>

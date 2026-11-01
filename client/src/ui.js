@@ -19,7 +19,7 @@ const reactionSymbols = {
 };
 
 export default function App(props = {}) {
-  const defaults = parseRepository(props.defaultRepository || 'orazdow/Blackboard');
+  const defaults = props.defaultRepository === null ? null : parseRepository(props.defaultRepository || 'orazdow/Blackboard');
   let storage;
   try { storage = localStorage; } catch { /* In-memory credentials still work. */ }
   const credentials = createCredentialStore(storage);
@@ -38,7 +38,7 @@ export default function App(props = {}) {
   try { restoredRecentRepositories = normalizeRecentRepositories(JSON.parse(storage?.getItem(recentRepositoriesKey) || '[]'), initial); }
   catch { /* Recent repositories are optional. */ }
   const [recentRepositories, setRecentRepositories] = createSignal(restoredRecentRepositories);
-  const [connection, setConnection] = createSignal({ repository: initial, credentials: credentials.get(initial) });
+  const [connection, setConnection] = createSignal({ repository: initial, credentials: initial ? credentials.get(initial) : null });
   const repository = () => connection().repository;
   const [permitted, setPermitted] = createSignal(false);
   const sessionState = new Map();
@@ -62,11 +62,30 @@ export default function App(props = {}) {
     credentials.forget(repository());
     batch(() => { setPermitted(false); setConnection({ repository: repository(), credentials: null }); });
   }
-  return <Show when={connection()} keyed>{(selected) => <Workspace repository={selected.repository} credentials={selected.credentials}
-    permitted={permitted()} onConnect={connect} onForget={forget} getCredentials={(repo) => credentials.get(repo)}
-    recentRepositories={recentRepositories()}
-    onAccessChange={(value) => { if (connection() === selected) setPermitted(value); }}
-    sessionState={sessionState} discussionsEnabled={props.discussionsEnabled} projectsEnabled={props.projectsEnabled} />}</Show>;
+  return <Show when={connection()} keyed>{(selected) =>
+    <Show when={selected.repository} fallback={<UnconnectedWorkspace
+      onConnect={connect} getCredentials={(repo) => credentials.get(repo)} recentRepositories={recentRepositories()}
+      projectsEnabled={props.projectsEnabled} />}>
+      <Workspace repository={selected.repository} credentials={selected.credentials}
+        permitted={permitted()} onConnect={connect} onForget={forget} getCredentials={(repo) => credentials.get(repo)}
+        recentRepositories={recentRepositories()}
+        onAccessChange={(value) => { if (connection() === selected) setPermitted(value); }}
+        sessionState={sessionState} discussionsEnabled={props.discussionsEnabled} projectsEnabled={props.projectsEnabled} />
+    </Show>
+  }</Show>;
+}
+
+function UnconnectedWorkspace(props) {
+  return <section class="app-shell">
+    <aside class="sidebar" aria-label="Repositories">
+      <RepositorySelector repository={null} credentials={null} permitted={false} onConnect={props.onConnect}
+        getCredentials={props.getCredentials} recentRepositories={props.recentRepositories} projectsEnabled={props.projectsEnabled} />
+    </aside>
+    <section class="chat-panel empty-chat">
+      <h2>Connect a repository</h2>
+      <p class="muted">Open the repository menu to choose a workspace.</p>
+    </section>
+  </section>;
 }
 
 function Workspace(props) {

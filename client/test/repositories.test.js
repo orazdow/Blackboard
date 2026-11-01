@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGitHubClient } from '../src/api.js';
-import { parseRepository, repositoryFromPagesUrl } from '../src/repository-state.js';
+import { defaultRepositoryForUrl, parseRepository, repositoryFromPagesUrl } from '../src/repository-state.js';
 
 test('repository input accepts owner/repo and GitHub clone URLs', () => {
   for (const value of [' Alice/Board ', 'https://github.com/Alice/Board', 'https://github.com/Alice/Board/', 'https://github.com/Alice/Board.git']) {
@@ -28,6 +28,14 @@ test('local, custom-domain, malformed, and misleading Pages URLs do not guess a 
   for (const url of ['http://localhost:3000/', 'https://board.example/organizer/', 'https://alice.github.io.evil.test/organizer/', 'not a URL', 'https://alice.github.io/owner%2Frepo/']) {
     assert.equal(repositoryFromPagesUrl(url), null);
   }
+});
+
+test('the central site starts without a repository while template sites keep their own default', () => {
+  assert.equal(defaultRepositoryForUrl('https://orazdow.github.io/Blackboard/'), null);
+  assert.equal(defaultRepositoryForUrl('https://orazdow.github.io/Blackboard/index.html?repo=someone/other'), null);
+  assert.equal(defaultRepositoryForUrl('https://alice.github.io/organizer/'), 'alice/organizer');
+  assert.equal(defaultRepositoryForUrl('http://localhost:3000/'), 'orazdow/Blackboard');
+  assert.equal(defaultRepositoryForUrl('https://orazdow.github.io/Blackboard/', 'someone/other'), 'someone/other');
 });
 
 test('connection verifies repository and issue access without any write and uses canonical owner/name', async () => {
