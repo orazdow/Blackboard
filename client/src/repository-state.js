@@ -43,6 +43,14 @@ export function recentRepositoriesAfterConnect(recent, previous, next) {
   return normalizeRecentRepositories(history, next);
 }
 
+export function recentRepositoriesAfterForget(recent, forgotten) {
+  return recent.filter((repository) => repositoryKey(repository) !== repositoryKey(forgotten));
+}
+
+export function canForgetRepository(repository, defaultRepository) {
+  return Boolean(repository) && (!defaultRepository || repositoryKey(repository) !== repositoryKey(defaultRepository));
+}
+
 // A template ships the same prebuilt client to every owner. Standard Pages URLs
 // identify the new home repository without requiring a rebuild or private config.
 export function repositoryFromPagesUrl(value) {

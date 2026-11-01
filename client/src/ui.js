@@ -6,7 +6,7 @@ import NoteView from './note-ui.js';
 import ListView from './list-ui.js';
 import TalkDescription from './talk-description.js';
 import RepositorySelector from './repository-ui.js';
-import { normalizeRecentRepositories, parseRepository, recentRepositoriesAfterConnect, repositoryKey, repositoryName } from './repository-state.js';
+import { canForgetRepository, normalizeRecentRepositories, parseRepository, recentRepositoriesAfterConnect, recentRepositoriesAfterForget, repositoryKey, repositoryName } from './repository-state.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
 import { createMilestoneTracker, goalProgress, listCompletion, sortMilestones } from './milestone-state.js';
@@ -59,16 +59,43 @@ export default function App(props = {}) {
     } catch { /* URL updates are optional. */ }
     batch(() => { setPermitted(true); setConnection({ repository: next, credentials: saved }); });
   }
-  function forget() {
-    credentials.forget(repository());
-    batch(() => { setPermitted(false); setConnection({ repository: repository(), credentials: null }); });
+  function forget(target = repository()) {
+    credentials.forget(target);
+    if (repository() && repositoryKey(repository()) === repositoryKey(target)) {
+      batch(() => { setPermitted(false); setConnection({ repository: repository(), credentials: null }); });
+    }
+  }
+  function forgetRepository(target) {
+    if (!canForgetRepository(target, defaults)) return;
+    credentials.forget(target);
+    const recent = recentRepositoriesAfterForget(recentRepositories(), target);
+    try { storage?.setItem(recentRepositoriesKey, JSON.stringify(recent.map(repositoryName))); }
+    catch { /* Removing this repository still works for the current session. */ }
+    const isActive = repository() && repositoryKey(repository()) === repositoryKey(target);
+    if (isActive) {
+      try { sessionStorage.removeItem(siteSelectionKey); } catch { /* The default still opens on the next fresh session. */ }
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('repo');
+        history.replaceState(null, '', url);
+      } catch { /* URL updates are optional. */ }
+    }
+    batch(() => {
+      setRecentRepositories(recent);
+      if (isActive) {
+        setPermitted(false);
+        setConnection({ repository: defaults, credentials: defaults ? credentials.get(defaults) : null });
+      }
+    });
   }
   return <Show when={connection()} keyed>{(selected) =>
     <Show when={selected.repository} fallback={<UnconnectedWorkspace
-      onConnect={connect} getCredentials={(repo) => credentials.get(repo)} recentRepositories={recentRepositories()}
+      onConnect={connect} onForget={forget} onForgetRepository={forgetRepository} defaultRepository={defaults}
+      getCredentials={(repo) => credentials.get(repo)} recentRepositories={recentRepositories()}
       projectsEnabled={props.projectsEnabled} />}>
       <Workspace repository={selected.repository} credentials={selected.credentials}
-        permitted={permitted()} onConnect={connect} onForget={forget} getCredentials={(repo) => credentials.get(repo)}
+        permitted={permitted()} onConnect={connect} onForget={forget} onForgetRepository={forgetRepository} defaultRepository={defaults}
+        getCredentials={(repo) => credentials.get(repo)}
         recentRepositories={recentRepositories()}
         onAccessChange={(value) => { if (connection() === selected) setPermitted(value); }}
         sessionState={sessionState} discussionsEnabled={props.discussionsEnabled} projectsEnabled={props.projectsEnabled} />
@@ -80,6 +107,7 @@ function UnconnectedWorkspace(props) {
   return <section class="app-shell">
     <aside class="sidebar" aria-label="Repositories">
       <RepositorySelector repository={null} credentials={null} permitted={false} onConnect={props.onConnect}
+        onForget={props.onForget} onForgetRepository={props.onForgetRepository} defaultRepository={props.defaultRepository}
         getCredentials={props.getCredentials} recentRepositories={props.recentRepositories} projectsEnabled={props.projectsEnabled} />
     </aside>
     <section class="chat-panel empty-chat">
@@ -892,6 +920,7 @@ function Workspace(props) {
       <aside class="sidebar" aria-label="Chat topics">
         <RepositorySelector repository={props.repository} credentials={props.credentials} permitted={props.permitted}
           getCredentials={props.getCredentials} onConnect={props.onConnect} onForget={props.onForget}
+          onForgetRepository={props.onForgetRepository} defaultRepository={props.defaultRepository}
           recentRepositories={props.recentRepositories} switchDisabled={switchingDisabled()} projectsEnabled={projectsEnabled} />
         <div class="sidebar-actions">
           <button
@@ -1217,7 +1246,7 @@ function Workspace(props) {
         <Show when={reactionError()}><p class="dialog-error" role="alert">{reactionError()}</p></Show>
         <div class="dialog-actions"><button type="button" autofocus disabled={reactionBusy()} onClick={() => reactionDialog.close()}>Cancel</button></div>
       </dialog>
-      <dialog ref={removeDialog} class="topic-status-dialog" aria-labelledby="remove-topic-title"
+      <dialog ref={removeDialog} class="topic-status-dialog remove-topic-dialog" aria-labelledby="remove-topic-title"
         onPointerDown={trackBackdrop} onClick={(event) => dismissBackdrop(event, removalPending())}
         onCancel={(event) => { if (removalPending()) event.preventDefault(); }}
         onClose={() => { setRemoveTarget(null); setRemoveError(''); setConfirmDelete(false); }}>

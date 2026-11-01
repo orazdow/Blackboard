@@ -2270,6 +2270,12 @@ function recentRepositoriesAfterConnect(recent, previous, next) {
   const history = previous && repositoryKey(previous) !== repositoryKey(next) ? [previous, ...recent] : recent;
   return normalizeRecentRepositories(history, next);
 }
+function recentRepositoriesAfterForget(recent, forgotten) {
+  return recent.filter(repository => repositoryKey(repository) !== repositoryKey(forgotten));
+}
+function canForgetRepository(repository, defaultRepository) {
+  return Boolean(repository) && (!defaultRepository || repositoryKey(repository) !== repositoryKey(defaultRepository));
+}
 
 // A template ships the same prebuilt client to every owner. Standard Pages URLs
 // identify the new home repository without requiring a rebuild or private config.
@@ -2480,7 +2486,7 @@ var _tmpl$$5 = /*#__PURE__*/template(`<details class=project-menu><summary></sum
   _tmpl$0$3 = /*#__PURE__*/template(`<a target=_blank rel="noopener noreferrer">Open in GitHub ↗`),
   _tmpl$1$3 = /*#__PURE__*/template(`<a class=preview-badge target=_blank rel="noopener noreferrer">GitHub ↗`),
   _tmpl$10$3 = /*#__PURE__*/template(`<div class=api-error role=alert> <button type=button aria-label="Dismiss project error">×`),
-  _tmpl$11$2 = /*#__PURE__*/template(`<button type=button>+ Table`),
+  _tmpl$11$3 = /*#__PURE__*/template(`<button type=button>+ Table`),
   _tmpl$12$1 = /*#__PURE__*/template(`<button type=button>+ Board`),
   _tmpl$13$1 = /*#__PURE__*/template(`<nav class=project-views aria-label="Project views">`),
   _tmpl$14$1 = /*#__PURE__*/template(`<span class=project-view-label>Board`),
@@ -3340,7 +3346,7 @@ function ProjectBoard(props) {
                 label: "New view",
                 get children() {
                   return [(() => {
-                    var _el$24 = _tmpl$11$2();
+                    var _el$24 = _tmpl$11$3();
                     _el$24.$$click = () => openEditor('view', {
                       layout: 'TABLE_LAYOUT'
                     });
@@ -4311,7 +4317,7 @@ var _tmpl$$3 = /*#__PURE__*/template(`<button type=button>`),
   _tmpl$0$2 = /*#__PURE__*/template(`<div class=list-item>`),
   _tmpl$1$2 = /*#__PURE__*/template(`<label><input type=checkbox><span>`),
   _tmpl$10$2 = /*#__PURE__*/template(`<button type=button>Edit`),
-  _tmpl$11$1 = /*#__PURE__*/template(`<button type=button>Remove`);
+  _tmpl$11$2 = /*#__PURE__*/template(`<button type=button>Remove`);
 function ListView(props) {
   const [newItem, setNewItem] = createSignal('');
   const [editingIndex, setEditingIndex] = createSignal(null);
@@ -4521,7 +4527,7 @@ function ListView(props) {
                         });
                         return _el$27;
                       })(), (() => {
-                        var _el$28 = _tmpl$11$1();
+                        var _el$28 = _tmpl$11$2();
                         _el$28.$$click = () => write(changeChecklistItem(props.topic.description, item.index, 'remove'));
                         createRenderEffect(_p$ => {
                           var _v$11 = busy() || uncertain(),
@@ -4835,10 +4841,11 @@ var _tmpl$$1 = /*#__PURE__*/template(`<div class=repository-current><span></span
   _tmpl$6$1 = /*#__PURE__*/template(`<div id=repository-menu class=repository-menu aria-label="Repository selection"><button type=button class=repository-connect aria-haspopup=dialog>Connect repository`),
   _tmpl$7$1 = /*#__PURE__*/template(`<label for=permit-project-token>Projects token <span class=muted>(optional)`),
   _tmpl$8$1 = /*#__PURE__*/template(`<input id=permit-project-token type=password autocomplete=off spellcheck=false>`),
-  _tmpl$9$1 = /*#__PURE__*/template(`<button type=button class=permit-forget>Forget credentials`),
-  _tmpl$0$1 = /*#__PURE__*/template(`<button type=button>Continue without Projects`),
-  _tmpl$1$1 = /*#__PURE__*/template(`<header class="workspace-header repository-header"><button type=button class=repository-trigger aria-controls=repository-menu><img class=workspace-icon src=./lyra.jpg alt><span class=repository-heading><span class=repository-title></span><span class=muted></span></span><svg class=repository-chevron width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg></button><dialog class="topic-status-dialog permit-dialog"aria-labelledby=permit-title><form><h2 id=permit-title></h2><label for=permit-repository>Repository</label><input id=permit-repository type=text required autocomplete=off placeholder="owner/repo or GitHub URL"><label for=permit-token>Repository token</label><input id=permit-token type=password required autocomplete=off spellcheck=false><label class=permit-remember><input type=checkbox> Remember on this browser</label><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit>`),
-  _tmpl$10$1 = /*#__PURE__*/template(`<button type=button>`);
+  _tmpl$9$1 = /*#__PURE__*/template(`<button type=button>Continue without Projects`),
+  _tmpl$0$1 = /*#__PURE__*/template(`<header class="workspace-header repository-header"><button type=button class=repository-trigger aria-controls=repository-menu><img class=workspace-icon src=./lyra.jpg alt><span class=repository-heading><span class=repository-title></span><span class=muted></span></span><svg class=repository-chevron width=14 height=14 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg></button><dialog class="topic-status-dialog permit-dialog"aria-labelledby=permit-title><form><h2 id=permit-title></h2><label for=permit-repository>Repository</label><input id=permit-repository type=text required autocomplete=off placeholder="owner/repo or GitHub URL"><label for=permit-token>Repository token</label><input id=permit-token type=password required autocomplete=off spellcheck=false><label class=permit-remember><input type=checkbox> Remember on this browser</label><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit></button></div></form></dialog><dialog class="topic-status-dialog forget-repository-dialog"aria-labelledby=forget-repository-title><h2 id=forget-repository-title>Forget <!> and its credentials?</h2><div class=dialog-actions><button type=button>Forget</button><button type=button class=dialog-cancel>Cancel`),
+  _tmpl$1$1 = /*#__PURE__*/template(`<button type=button>`),
+  _tmpl$10$1 = /*#__PURE__*/template(`<button type=button class=permit-forget aria-haspopup=dialog>Forget repository`),
+  _tmpl$11$1 = /*#__PURE__*/template(`<div class=permit-forget-actions><button type=button class=permit-forget>Forget credentials`);
 function RepositorySelector(props) {
   const [open, setOpen] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
@@ -4849,7 +4856,10 @@ function RepositorySelector(props) {
   const [remember, setRemember] = createSignal(true);
   const [mode, setMode] = createSignal('permit');
   const [validated, setValidated] = createSignal(null);
-  let element, trigger, dialog;
+  const [targetRepository, setTargetRepository] = createSignal(null);
+  const [forgetTarget, setForgetTarget] = createSignal(null);
+  const [forgetError, setForgetError] = createSignal('');
+  let element, trigger, dialog, forgetDialog;
   let stopped = false,
     attempt = 0,
     tokensEdited = false;
@@ -4886,10 +4896,11 @@ function RepositorySelector(props) {
     setError('');
     setValidated(null);
     tokensEdited = false;
+    setTargetRepository(repository);
     const saved = repository ? props.getCredentials(repository) : null;
     setAddress(connecting ? connectedName : repository ? repositoryName(repository) : '');
-    setToken(saved?.token || (connecting ? props.credentials?.token : '') || '');
-    setProjectToken(saved?.projectToken || (props.projectsEnabled && connecting ? props.credentials?.projectToken : '') || '');
+    setToken(saved?.token || (connecting && !repository ? props.credentials?.token : '') || '');
+    setProjectToken(saved?.projectToken || (props.projectsEnabled && connecting && !repository ? props.credentials?.projectToken : '') || '');
     setRemember(saved?.remember ?? true);
     setMode(connecting ? 'connect' : 'permit');
     dialog.showModal();
@@ -4965,10 +4976,45 @@ function RepositorySelector(props) {
   }
   function forget() {
     if (busy() || props.switchDisabled) return;
+    const target = currentTarget();
+    if (!target) return;
     try {
-      props.onForget();
+      props.onForget(target);
+      tokensEdited = true;
+      setToken('');
+      setProjectToken('');
+      setValidated(null);
     } catch (failure) {
       setError(failure.message);
+    }
+  }
+  function requestForgetRepository() {
+    if (busy() || props.switchDisabled) return;
+    const target = currentTarget();
+    if (!canForgetRepository(target, props.defaultRepository)) return;
+    setForgetTarget(target);
+    setForgetError('');
+    forgetDialog.showModal();
+  }
+  function forgetRepository() {
+    if (busy() || props.switchDisabled) return;
+    const target = forgetTarget();
+    if (!canForgetRepository(target, props.defaultRepository)) return;
+    try {
+      props.onForgetRepository(target);
+      if (forgetDialog.open) forgetDialog.close();
+      if (dialog.open) dialog.close();
+    } catch (failure) {
+      setForgetError(failure.message);
+    }
+  }
+  function currentTarget() {
+    const target = targetRepository();
+    if (!target) return null;
+    try {
+      return repositoryKey(parseRepository(address())) === repositoryKey(target) ? target : null;
+    } catch {
+      return null;
     }
   }
   function changed() {
@@ -4988,7 +5034,7 @@ function RepositorySelector(props) {
     } catch {/* Address validation runs on Connect. */}
   }
   return (() => {
-    var _el$ = _tmpl$1$1(),
+    var _el$ = _tmpl$0$1(),
       _el$2 = _el$.firstChild,
       _el$3 = _el$2.firstChild,
       _el$4 = _el$3.nextSibling,
@@ -5003,9 +5049,17 @@ function RepositorySelector(props) {
       _el$20 = _el$19.nextSibling,
       _el$23 = _el$20.nextSibling,
       _el$24 = _el$23.firstChild,
-      _el$27 = _el$23.nextSibling,
-      _el$28 = _el$27.firstChild,
-      _el$30 = _el$28.nextSibling;
+      _el$26 = _el$23.nextSibling,
+      _el$27 = _el$26.firstChild,
+      _el$29 = _el$27.nextSibling,
+      _el$30 = _el$14.nextSibling,
+      _el$31 = _el$30.firstChild,
+      _el$32 = _el$31.firstChild,
+      _el$34 = _el$32.nextSibling;
+      _el$34.nextSibling;
+      var _el$36 = _el$31.nextSibling,
+      _el$37 = _el$36.firstChild,
+      _el$38 = _el$37.nextSibling;
     var _ref$ = element;
     typeof _ref$ === "function" ? use(_ref$, _el$) : element = _el$;
     _el$2.$$click = () => {
@@ -5057,17 +5111,17 @@ function RepositorySelector(props) {
                 return props.recentRepositories;
               },
               children: repository => (() => {
-                var _el$31 = _tmpl$10$1();
-                _el$31.$$click = () => openPermit(repository, true, repositoryName(repository));
-                insert(_el$31, () => repositoryName(repository));
-                createRenderEffect(() => _el$31.disabled = busy() || props.switchDisabled);
-                return _el$31;
+                var _el$39 = _tmpl$1$1();
+                _el$39.$$click = () => openPermit(repository, true, repositoryName(repository));
+                insert(_el$39, () => repositoryName(repository));
+                createRenderEffect(() => _el$39.disabled = busy() || props.switchDisabled);
+                return _el$39;
               })()
             }));
             return _el$1;
           }
         }), _el$10);
-        _el$10.$$click = () => openPermit(props.repository, true);
+        _el$10.$$click = () => openPermit(null, true);
         insert(_el$7, createComponent(Show, {
           get when() {
             return busy();
@@ -5113,6 +5167,7 @@ function RepositorySelector(props) {
       setToken('');
       setProjectToken('');
       setValidated(null);
+      setTargetRepository(null);
       setError('');
       trigger?.focus();
     });
@@ -5158,31 +5213,86 @@ function RepositorySelector(props) {
         insert(_el$25, error);
         return _el$25;
       }
-    }), _el$27);
+    }), _el$26);
     insert(_el$15, createComponent(Show, {
       get when() {
-        return memo(() => mode() === 'permit')() && props.credentials?.token;
+        return currentTarget();
       },
-      get children() {
-        var _el$26 = _tmpl$9$1();
-        _el$26.$$click = forget;
-        createRenderEffect(() => _el$26.disabled = busy() || props.switchDisabled);
-        return _el$26;
-      }
-    }), _el$27);
-    _el$28.$$click = () => dialog.close();
-    insert(_el$27, createComponent(Show, {
+      children: target => (() => {
+        var _el$40 = _tmpl$11$1(),
+          _el$41 = _el$40.firstChild;
+        _el$41.$$click = forget;
+        insert(_el$40, createComponent(Show, {
+          get when() {
+            return canForgetRepository(target(), props.defaultRepository);
+          },
+          get children() {
+            var _el$42 = _tmpl$10$1();
+            _el$42.$$click = requestForgetRepository;
+            createRenderEffect(_p$ => {
+              var _v$12 = busy() || props.switchDisabled,
+                _v$13 = `Forget repository ${repositoryName(target())}`;
+              _v$12 !== _p$.e && (_el$42.disabled = _p$.e = _v$12);
+              _v$13 !== _p$.t && setAttribute(_el$42, "aria-label", _p$.t = _v$13);
+              return _p$;
+            }, {
+              e: undefined,
+              t: undefined
+            });
+            return _el$42;
+          }
+        }), null);
+        createRenderEffect(_p$ => {
+          var _v$14 = busy() || props.switchDisabled,
+            _v$15 = `Forget credentials for ${repositoryName(target())}`;
+          _v$14 !== _p$.e && (_el$41.disabled = _p$.e = _v$14);
+          _v$15 !== _p$.t && setAttribute(_el$41, "aria-label", _p$.t = _v$15);
+          return _p$;
+        }, {
+          e: undefined,
+          t: undefined
+        });
+        return _el$40;
+      })()
+    }), _el$26);
+    _el$27.$$click = () => dialog.close();
+    insert(_el$26, createComponent(Show, {
       get when() {
         return validated();
       },
       get children() {
-        var _el$29 = _tmpl$0$1();
-        _el$29.$$click = withoutProjects;
-        createRenderEffect(() => _el$29.disabled = busy() || props.switchDisabled);
-        return _el$29;
+        var _el$28 = _tmpl$9$1();
+        _el$28.$$click = withoutProjects;
+        createRenderEffect(() => _el$28.disabled = busy() || props.switchDisabled);
+        return _el$28;
       }
-    }), _el$30);
-    insert(_el$30, () => busy() ? 'Checking...' : 'Connect');
+    }), _el$29);
+    insert(_el$29, () => busy() ? 'Checking...' : 'Connect');
+    _el$30.addEventListener("close", () => {
+      setForgetTarget(null);
+      setForgetError('');
+    });
+    _el$30.$$click = event => {
+      if (event.target === forgetDialog) forgetDialog.close();
+    };
+    var _ref$4 = forgetDialog;
+    typeof _ref$4 === "function" ? use(_ref$4, _el$30) : forgetDialog = _el$30;
+    insert(_el$31, (() => {
+      var _c$ = memo(() => !!forgetTarget());
+      return () => _c$() ? repositoryName(forgetTarget()) : 'repository';
+    })(), _el$34);
+    insert(_el$30, createComponent(Show, {
+      get when() {
+        return forgetError();
+      },
+      get children() {
+        var _el$35 = _tmpl$5$1();
+        insert(_el$35, forgetError);
+        return _el$35;
+      }
+    }), _el$36);
+    _el$37.$$click = forgetRepository;
+    _el$38.$$click = () => forgetDialog.close();
     createRenderEffect(_p$ => {
       var _v$5 = props.repository ? repositoryName(props.repository) : 'Connect repository',
         _v$6 = props.repository ? `Repository ${repositoryName(props.repository)}` : 'Connect repository',
@@ -5201,7 +5311,7 @@ function RepositorySelector(props) {
       _v$0 !== _p$.n && (_el$18.disabled = _p$.n = _v$0);
       _v$1 !== _p$.s && (_el$20.disabled = _p$.s = _v$1);
       _v$10 !== _p$.h && (_el$24.disabled = _p$.h = _v$10);
-      _v$11 !== _p$.r && (_el$30.disabled = _p$.r = _v$11);
+      _v$11 !== _p$.r && (_el$29.disabled = _p$.r = _v$11);
       return _p$;
     }, {
       e: undefined,
@@ -5417,7 +5527,7 @@ var _tmpl$ = /*#__PURE__*/template(`<section class=app-shell><aside class=sideba
   _tmpl$26 = /*#__PURE__*/template(`<nav class=milestone-list aria-label=Goals>`),
   _tmpl$27 = /*#__PURE__*/template(`<p class=dialog-error role=alert>`),
   _tmpl$28 = /*#__PURE__*/template(`<p role=status>`),
-  _tmpl$29 = /*#__PURE__*/template(`<section class=app-shell><aside class=sidebar aria-label="Chat topics"><div class=sidebar-actions><button type=button class=new-topic-button aria-controls=new-topic-form><span class=new-topic-plus aria-hidden=true>+</span> New topic</button></div><div class=topic-list-heading><div class=sidebar-label>Topics</div><button type=button class=topic-filter aria-label="Filter topics (coming soon)"aria-disabled=true title="Filter topics — coming soon"><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M3 6h4m4 0h10M3 12h10m4 0h4M3 18h2m4 0h12"></path><circle cx=9 cy=6 r=2></circle><circle cx=15 cy=12 r=2></circle><circle cx=7 cy=18 r=2></circle></svg></button></div><nav class=channel-list aria-label=Topics></nav><section class=sidebar-section aria-label=Goals><button type=button class=sidebar-section-toggle aria-controls=milestones-panel><span class=sidebar-label>Goals</span><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path></path></svg></button><div id=milestones-panel class=sidebar-section-panel><div class=milestone-list-actions><button type=button class=new-milestone-button><span aria-hidden=true>+</span> New goal</button></div></div></section><footer class=sidebar-footer><span class=status-dot role=img></span></footer></aside><dialog class="topic-status-dialog milestone-dialog"aria-labelledby=milestone-form-title><form><h2 id=milestone-form-title></h2><label for=milestone-name>Name</label><input id=milestone-name type=text required maxlength=256 autofocus><label for=milestone-description>Description</label><textarea id=milestone-description rows=4></textarea><label for=milestone-date>Due date <span class=muted>(optional)</span></label><input id=milestone-date type=date><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit></button></div></form></dialog><dialog class=topic-status-dialog aria-labelledby=topic-status-title></dialog><dialog class="topic-status-dialog reaction-dialog"aria-labelledby=reaction-title><h2 id=reaction-title>React</h2><div class=reaction-choices></div><div class=dialog-actions><button type=button autofocus>Cancel</button></div></dialog><dialog class=topic-status-dialog aria-labelledby=remove-topic-title>`),
+  _tmpl$29 = /*#__PURE__*/template(`<section class=app-shell><aside class=sidebar aria-label="Chat topics"><div class=sidebar-actions><button type=button class=new-topic-button aria-controls=new-topic-form><span class=new-topic-plus aria-hidden=true>+</span> New topic</button></div><div class=topic-list-heading><div class=sidebar-label>Topics</div><button type=button class=topic-filter aria-label="Filter topics (coming soon)"aria-disabled=true title="Filter topics — coming soon"><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="M3 6h4m4 0h10M3 12h10m4 0h4M3 18h2m4 0h12"></path><circle cx=9 cy=6 r=2></circle><circle cx=15 cy=12 r=2></circle><circle cx=7 cy=18 r=2></circle></svg></button></div><nav class=channel-list aria-label=Topics></nav><section class=sidebar-section aria-label=Goals><button type=button class=sidebar-section-toggle aria-controls=milestones-panel><span class=sidebar-label>Goals</span><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path></path></svg></button><div id=milestones-panel class=sidebar-section-panel><div class=milestone-list-actions><button type=button class=new-milestone-button><span aria-hidden=true>+</span> New goal</button></div></div></section><footer class=sidebar-footer><span class=status-dot role=img></span></footer></aside><dialog class="topic-status-dialog milestone-dialog"aria-labelledby=milestone-form-title><form><h2 id=milestone-form-title></h2><label for=milestone-name>Name</label><input id=milestone-name type=text required maxlength=256 autofocus><label for=milestone-description>Description</label><textarea id=milestone-description rows=4></textarea><label for=milestone-date>Due date <span class=muted>(optional)</span></label><input id=milestone-date type=date><div class=dialog-actions><button type=button class=dialog-cancel>Cancel</button><button type=submit></button></div></form></dialog><dialog class=topic-status-dialog aria-labelledby=topic-status-title></dialog><dialog class="topic-status-dialog reaction-dialog"aria-labelledby=reaction-title><h2 id=reaction-title>React</h2><div class=reaction-choices></div><div class=dialog-actions><button type=button autofocus>Cancel</button></div></dialog><dialog class="topic-status-dialog remove-topic-dialog"aria-labelledby=remove-topic-title>`),
   _tmpl$30 = /*#__PURE__*/template(`<small class=topic-parent-hint>Under: `),
   _tmpl$31 = /*#__PURE__*/template(`<button type=button class=topic-expand>`),
   _tmpl$32 = /*#__PURE__*/template(`<small role=status>`),
@@ -5520,14 +5630,45 @@ function App(props = {}) {
       });
     });
   }
-  function forget() {
-    credentials.forget(repository());
-    batch(() => {
-      setPermitted(false);
-      setConnection({
-        repository: repository(),
-        credentials: null
+  function forget(target = repository()) {
+    credentials.forget(target);
+    if (repository() && repositoryKey(repository()) === repositoryKey(target)) {
+      batch(() => {
+        setPermitted(false);
+        setConnection({
+          repository: repository(),
+          credentials: null
+        });
       });
+    }
+  }
+  function forgetRepository(target) {
+    if (!canForgetRepository(target, defaults)) return;
+    credentials.forget(target);
+    const recent = recentRepositoriesAfterForget(recentRepositories(), target);
+    try {
+      storage?.setItem(recentRepositoriesKey, JSON.stringify(recent.map(repositoryName)));
+    } catch {/* Removing this repository still works for the current session. */}
+    const isActive = repository() && repositoryKey(repository()) === repositoryKey(target);
+    if (isActive) {
+      try {
+        sessionStorage.removeItem(siteSelectionKey);
+      } catch {/* The default still opens on the next fresh session. */}
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('repo');
+        history.replaceState(null, '', url);
+      } catch {/* URL updates are optional. */}
+    }
+    batch(() => {
+      setRecentRepositories(recent);
+      if (isActive) {
+        setPermitted(false);
+        setConnection({
+          repository: defaults,
+          credentials: defaults ? credentials.get(defaults) : null
+        });
+      }
     });
   }
   return createComponent(Show, {
@@ -5542,6 +5683,9 @@ function App(props = {}) {
       get fallback() {
         return createComponent(UnconnectedWorkspace, {
           onConnect: connect,
+          onForget: forget,
+          onForgetRepository: forgetRepository,
+          defaultRepository: defaults,
           getCredentials: repo => credentials.get(repo),
           get recentRepositories() {
             return recentRepositories();
@@ -5564,6 +5708,8 @@ function App(props = {}) {
           },
           onConnect: connect,
           onForget: forget,
+          onForgetRepository: forgetRepository,
+          defaultRepository: defaults,
           getCredentials: repo => credentials.get(repo),
           get recentRepositories() {
             return recentRepositories();
@@ -5593,6 +5739,15 @@ function UnconnectedWorkspace(props) {
       permitted: false,
       get onConnect() {
         return props.onConnect;
+      },
+      get onForget() {
+        return props.onForget;
+      },
+      get onForgetRepository() {
+        return props.onForgetRepository;
+      },
+      get defaultRepository() {
+        return props.defaultRepository;
       },
       get getCredentials() {
         return props.getCredentials;
@@ -6891,6 +7046,12 @@ function Workspace(props) {
       },
       get onForget() {
         return props.onForget;
+      },
+      get onForgetRepository() {
+        return props.onForgetRepository;
+      },
+      get defaultRepository() {
+        return props.defaultRepository;
       },
       get recentRepositories() {
         return props.recentRepositories;

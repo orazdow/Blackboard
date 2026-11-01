@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGitHubClient } from '../src/api.js';
-import { defaultRepositoryForUrl, parseRepository, repositoryFromPagesUrl } from '../src/repository-state.js';
+import { canForgetRepository, defaultRepositoryForUrl, parseRepository, recentRepositoriesAfterForget, repositoryFromPagesUrl } from '../src/repository-state.js';
 
 test('repository input accepts owner/repo and GitHub clone URLs', () => {
   for (const value of [' Alice/Board ', 'https://github.com/Alice/Board', 'https://github.com/Alice/Board/', 'https://github.com/Alice/Board.git']) {
@@ -36,6 +36,15 @@ test('the central site starts without a repository while template sites keep the
   assert.equal(defaultRepositoryForUrl('https://alice.github.io/organizer/'), 'alice/organizer');
   assert.equal(defaultRepositoryForUrl('http://localhost:3000/'), 'orazdow/Blackboard');
   assert.equal(defaultRepositoryForUrl('https://orazdow.github.io/Blackboard/', 'someone/other'), 'someone/other');
+});
+
+test('forgetting a repository preserves other recents and protects the site default', () => {
+  const home = parseRepository('Alice/Board');
+  const other = parseRepository('Alice/Notes');
+  assert.equal(canForgetRepository(home, parseRepository('alice/board')), false);
+  assert.equal(canForgetRepository(other, home), true);
+  assert.equal(canForgetRepository(other, null), true);
+  assert.deepEqual(recentRepositoriesAfterForget([home, other], parseRepository('alice/notes')), [home]);
 });
 
 test('connection verifies repository and issue access without any write and uses canonical owner/name', async () => {
