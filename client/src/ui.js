@@ -31,8 +31,12 @@ export default function App(props = {}) {
     const requested = new URL(window.location.href).searchParams.get('repo');
     if (requested) initial = parseRepository(requested);
     else {
-      const saved = sessionStorage.getItem(siteSelectionKey);
-      if (saved) initial = parseRepository(saved);
+      const sessionSaved = sessionStorage.getItem(siteSelectionKey);
+      const saved = sessionSaved || (defaults === null ? storage?.getItem(siteSelectionKey) : null);
+      if (saved) {
+        initial = parseRepository(saved);
+        if (defaults === null && sessionSaved) storage?.setItem(siteSelectionKey, repositoryName(initial));
+      }
     }
   } catch { /* Invalid saved selections fall back to local configuration. */ }
   let restoredRecentRepositories = [];
@@ -49,9 +53,12 @@ export default function App(props = {}) {
     setRecentRepositories(recent);
     try { storage?.setItem(recentRepositoriesKey, JSON.stringify(recent.map(repositoryName))); }
     catch { /* Repository switching works without saved history. */ }
-    try {
-      sessionStorage.setItem(siteSelectionKey, repositoryName(next));
-    } catch { /* Switching still works without browser storage. */ }
+    try { sessionStorage.setItem(siteSelectionKey, repositoryName(next)); }
+    catch { /* Switching still works without session storage. */ }
+    if (defaults === null) {
+      try { storage?.setItem(siteSelectionKey, repositoryName(next)); }
+      catch { /* The central page still works without persistent storage. */ }
+    }
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('repo', repositoryName(next));
@@ -68,12 +75,18 @@ export default function App(props = {}) {
   function forgetRepository(target) {
     if (!canForgetRepository(target, defaults)) return;
     credentials.forget(target);
+    for (const getSource of [() => sessionStorage, () => storage]) {
+      try {
+        const source = getSource();
+        const saved = source?.getItem(siteSelectionKey);
+        if (saved && repositoryKey(parseRepository(saved)) === repositoryKey(target)) source.removeItem(siteSelectionKey);
+      } catch { /* Forgetting the repository still works without browser storage. */ }
+    }
     const recent = recentRepositoriesAfterForget(recentRepositories(), target);
     try { storage?.setItem(recentRepositoriesKey, JSON.stringify(recent.map(repositoryName))); }
     catch { /* Removing this repository still works for the current session. */ }
     const isActive = repository() && repositoryKey(repository()) === repositoryKey(target);
     if (isActive) {
-      try { sessionStorage.removeItem(siteSelectionKey); } catch { /* The default still opens on the next fresh session. */ }
       try {
         const url = new URL(window.location.href);
         url.searchParams.delete('repo');
@@ -977,10 +990,11 @@ function Workspace(props) {
             <button
               type="button"
               class="channel-button"
+              title={item.name}
               aria-current={activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined}
               onClick={() => selectTopic(item.id)}
             >
-              <TopicMarker kind={item.kind} />{item.name}
+              <TopicMarker kind={item.kind} /><span class="channel-name">{item.name}</span>
               <Show when={closing()[item.id] || item.state === 'closed'}><small role="status">{statusLabel(item.id) || 'Closed'}</small></Show>
             </button>
             <Show when={item.kind !== 'discussion'}><button type="button" class="add-subtopic-button" disabled={Boolean(closing()[item.id]) || creating() || createUncertain() || !isConfigured}
@@ -995,7 +1009,7 @@ function Workspace(props) {
             <div class="channel-row is-pending" style={{ 'margin-left': pending().parentId ? `${Math.min((visibleTopics().find((item) => item.id === pending().parentId)?.depth ?? 0) + 1, 5) * 16}px` : '0' }} aria-busy={pending().status === 'creating'}>
               <span class="topic-expand" aria-hidden="true" />
               <div class="channel-button">
-                <TopicMarker kind={pending().kind} />{pending().name}
+                <TopicMarker kind={pending().kind} /><span class="channel-name">{pending().name}</span>
                 <small role="status">{pending().status === 'creating' ? 'Creating…' : 'Unconfirmed'}</small>
               </div>
             </div>
@@ -1058,14 +1072,15 @@ function Workspace(props) {
       <section class="chat-panel" aria-label={`${topic().name} ${['note', 'list'].includes(topic().kind) ? topic().kind : 'chat'}`}>
         <header class="chat-header">
           <h2>{topic().name}</h2>
-          <Show when={topic().kind === 'discussion'}><p class="muted">{topic().description}</p></Show>
+          <Show when={topic().kind === 'discussion'}><p>{topic().description}</p></Show>
           <div class="chat-header-actions">
             <a class="preview-badge" href={topic().url} target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
         </header>
 
-        <Show when={topic().kind === 'talk' ? topic().id : null} keyed>{() =>
-          <TalkDescription topic={topic()} api={api} onBusyChange={setTalkWriting}
+        <Show when={topic().kind === 'talk' || topic().kind === 'list' ? `${topic().id}:${topic().kind}` : null} keyed>{() =>
+          <TalkDescription topic={topic()} api={api} writing={topic().kind === 'list' && listWriting()}
+            onBusyChange={topic().kind === 'list' ? setListWriting : setTalkWriting}
             onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>
 
@@ -1186,7 +1201,8 @@ function Workspace(props) {
             onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>
         <Show when={topic().kind === 'list' ? topic().id : null} keyed>{() =>
-          <ListView topic={topic()} api={api} draftKey={`blackboard:${workspaceKey}:list:${topic().id}:draft`} onBusyChange={setListWriting}
+          <ListView topic={topic()} api={api} writing={listWriting()}
+            draftKey={`blackboard:${workspaceKey}:list:${topic().id}:draft`} onBusyChange={setListWriting}
             onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>
       </section>

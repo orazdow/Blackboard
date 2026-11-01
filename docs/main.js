@@ -2487,8 +2487,8 @@ var _tmpl$$5 = /*#__PURE__*/template(`<details class=project-menu><summary></sum
   _tmpl$1$3 = /*#__PURE__*/template(`<a class=preview-badge target=_blank rel="noopener noreferrer">GitHub ↗`),
   _tmpl$10$3 = /*#__PURE__*/template(`<div class=api-error role=alert> <button type=button aria-label="Dismiss project error">×`),
   _tmpl$11$3 = /*#__PURE__*/template(`<button type=button>+ Table`),
-  _tmpl$12$1 = /*#__PURE__*/template(`<button type=button>+ Board`),
-  _tmpl$13$1 = /*#__PURE__*/template(`<nav class=project-views aria-label="Project views">`),
+  _tmpl$12$2 = /*#__PURE__*/template(`<button type=button>+ Board`),
+  _tmpl$13$2 = /*#__PURE__*/template(`<nav class=project-views aria-label="Project views">`),
   _tmpl$14$1 = /*#__PURE__*/template(`<span class=project-view-label>Board`),
   _tmpl$15$1 = /*#__PURE__*/template(`<select aria-label="Add topic to project"value><option value>`),
   _tmpl$16$1 = /*#__PURE__*/template(`<button type=button class=project-add-column>+ Column`),
@@ -3281,7 +3281,7 @@ function ProjectBoard(props) {
       },
       get children() {
         return [(() => {
-          var _el$23 = _tmpl$13$1();
+          var _el$23 = _tmpl$13$2();
           insert(_el$23, createComponent(For, {
             get each() {
               return views();
@@ -3352,7 +3352,7 @@ function ProjectBoard(props) {
                     });
                     return _el$24;
                   })(), (() => {
-                    var _el$25 = _tmpl$12$1();
+                    var _el$25 = _tmpl$12$2();
                     _el$25.$$click = () => openEditor('view', {
                       layout: 'BOARD_LAYOUT'
                     });
@@ -4254,10 +4254,12 @@ delegateEvents(["click", "input"]);
 // List issues remain ordinary GitHub Markdown task lists.
 const TASK_LINE = /^(\s*[-*+]\s+\[)([ xX])(\]\s+)(.*)$/;
 const FENCE_LINE = /^ {0,3}([\x60~])\1{2,}/;
+const indentOf = line => (line.match(/^[ \t]*/) || [''])[0].replace(/\t/g, '    ').length;
 function checklist(body) {
   const newline = body.includes('\r\n') ? '\r\n' : '\n';
   const lines = body.split(/\r?\n/);
   const items = [];
+  const indentStack = [];
   let fence = null;
   lines.forEach((line, index) => {
     const marker = FENCE_LINE.exec(line);
@@ -4273,11 +4275,18 @@ function checklist(body) {
       return;
     }
     const match = TASK_LINE.exec(line);
-    if (match) items.push({
-      index,
-      checked: match[2].toLowerCase() === 'x',
-      text: match[4]
-    });
+    if (match) {
+      const indent = indentOf(line);
+      while (indentStack.length && indent <= indentStack.at(-1)) indentStack.pop();
+      items.push({
+        index,
+        indent,
+        depth: indentStack.length,
+        checked: match[2].toLowerCase() === 'x',
+        text: match[4]
+      });
+      indentStack.push(indent);
+    }
   });
   return {
     lines,
@@ -4285,24 +4294,78 @@ function checklist(body) {
     items
   };
 }
+function listDescription(body) {
+  const parsed = checklist(body);
+  const firstItem = parsed.items[0]?.index ?? parsed.lines.length;
+  return parsed.lines.slice(0, firstItem).join(parsed.newline).trimEnd();
+}
+function replaceListDescription(body, description) {
+  const parsed = checklist(body);
+  const firstItem = parsed.items[0]?.index;
+  const text = String(description).trimEnd();
+  if (firstItem === undefined) return text;
+  const itemsAndFollowingText = parsed.lines.slice(firstItem).join(parsed.newline);
+  return text ? `${text}${parsed.newline}${parsed.newline}${itemsAndFollowingText}` : itemsAndFollowingText;
+}
 function changeChecklistItem(body, index, change) {
   const {
     lines,
-    newline
+    newline,
+    items
   } = checklist(body);
+  const itemIndex = items.findIndex(item => item.index === index);
+  if (itemIndex < 0) throw new Error('This list item changed. Refresh the list and try again.');
   const match = TASK_LINE.exec(lines[index] || '');
   if (!match) throw new Error('This list item changed. Refresh the list and try again.');
-  if (change === 'remove') lines.splice(index, 1);else if (change === 'toggle') lines[index] = `${match[1]}${match[2].toLowerCase() === 'x' ? ' ' : 'x'}${match[3]}${match[4]}`;else {
+  if (change === 'remove') {
+    const parentIndent = items[itemIndex].indent;
+    const descendants = [];
+    for (const item of items.slice(itemIndex + 1)) {
+      if (item.indent <= parentIndent) break;
+      descendants.push(item);
+    }
+    const childIndent = Math.min(...descendants.map(item => item.indent));
+    const shift = Number.isFinite(childIndent) ? childIndent - parentIndent : 0;
+    for (const child of descendants) {
+      lines[child.index] = ' '.repeat(child.indent - shift) + lines[child.index].replace(/^[ \t]*/, '');
+    }
+    lines.splice(index, 1);
+  } else if (change === 'toggle') lines[index] = `${match[1]}${match[2].toLowerCase() === 'x' ? ' ' : 'x'}${match[3]}${match[4]}`;else {
     const text = String(change).trim();
     if (!text || /[\r\n]/.test(text)) throw new Error('Enter one line of text for a list item.');
     lines[index] = `${match[1]}${match[2]}${match[3]}${text}`;
   }
   return lines.join(newline);
 }
+function insertChecklistChild(body, parentIndex, text) {
+  const child = String(text).trim();
+  if (!child || /[\r\n]/.test(child)) throw new Error('Enter one line of text for a list item.');
+  const {
+    lines,
+    newline,
+    items
+  } = checklist(body);
+  const itemIndex = items.findIndex(item => item.index === parentIndex);
+  if (itemIndex < 0) throw new Error('This list item changed. Refresh the list and try again.');
+  const parent = items[itemIndex];
+  let insertionIndex = parent.index + 1;
+  let childIndent = parent.indent + 2;
+  let foundChild = false;
+  for (const item of items.slice(itemIndex + 1)) {
+    if (item.indent <= parent.indent) break;
+    if (!foundChild) childIndent = item.indent;
+    foundChild = true;
+    insertionIndex = item.index + 1;
+  }
+  lines.splice(insertionIndex, 0, `${' '.repeat(childIndent)}- [ ] ${child}`);
+  return lines.join(newline);
+}
 function appendChecklistItem(body, text) {
   const item = String(text).trim();
   if (!item || /[\r\n]/.test(item)) throw new Error('Enter one line of text for a list item.');
-  return `${body}${body && !/\r?\n$/.test(body) ? body.includes('\r\n') ? '\r\n' : '\n' : ''}- [ ] ${item}`;
+  const separator = body && !/\r?\n$/.test(body) ? body.includes('\r\n') ? '\r\n' : '\n' : '';
+  const descriptionBreak = body && !checklist(body).items.length && !/\r?\n\s*\r?\n$/.test(body) ? body.includes('\r\n') ? '\r\n' : '\n' : '';
+  return `${body}${separator}${descriptionBreak}- [ ] ${item}`;
 }
 
 var _tmpl$$3 = /*#__PURE__*/template(`<button type=button>`),
@@ -4315,13 +4378,17 @@ var _tmpl$$3 = /*#__PURE__*/template(`<button type=button>`),
   _tmpl$8$3 = /*#__PURE__*/template(`<p class=muted>No items yet.`),
   _tmpl$9$2 = /*#__PURE__*/template(`<form class=list-item-edit><input type=text aria-label="Edit list item"maxlength=500><button type=submit>Save</button><button type=button>Cancel`),
   _tmpl$0$2 = /*#__PURE__*/template(`<div class=list-item>`),
-  _tmpl$1$2 = /*#__PURE__*/template(`<label><input type=checkbox><span>`),
-  _tmpl$10$2 = /*#__PURE__*/template(`<button type=button>Edit`),
-  _tmpl$11$2 = /*#__PURE__*/template(`<button type=button>Remove`);
+  _tmpl$1$2 = /*#__PURE__*/template(`<form class="list-add list-subitem-add"><input type=text placeholder="Add a subitem"maxlength=500><button type=submit>Add</button><button type=button>Cancel`),
+  _tmpl$10$2 = /*#__PURE__*/template(`<label><input type=checkbox><span>`),
+  _tmpl$11$2 = /*#__PURE__*/template(`<button type=button>+ Subitem`),
+  _tmpl$12$1 = /*#__PURE__*/template(`<button type=button>Edit`),
+  _tmpl$13$1 = /*#__PURE__*/template(`<button type=button>Remove`);
 function ListView(props) {
   const [newItem, setNewItem] = createSignal('');
   const [editingIndex, setEditingIndex] = createSignal(null);
   const [editingText, setEditingText] = createSignal('');
+  const [subitemParent, setSubitemParent] = createSignal(null);
+  const [subitemText, setSubitemText] = createSignal('');
   const [sourceEditing, setSourceEditing] = createSignal(false);
   const [sourceDraft, setSourceDraft] = createSignal('');
   const [sourceBase, setSourceBase] = createSignal('');
@@ -4365,7 +4432,7 @@ function ListView(props) {
     setError('');
   }
   async function write(nextBody, afterSuccess = () => {}, expectedBody = props.topic.description) {
-    if (busy() || uncertain() || nextBody === expectedBody) return;
+    if (busy() || props.writing || uncertain() || nextBody === expectedBody) return;
     setBusy(true);
     props.onBusyChange(true);
     setError('');
@@ -4401,6 +4468,7 @@ function ListView(props) {
     }
   }
   async function openSource() {
+    if (busy() || props.writing) return;
     setBusy(true);
     setError('');
     try {
@@ -4417,8 +4485,14 @@ function ListView(props) {
     }
   }
   function editItem(item) {
+    setSubitemParent(null);
     setEditingIndex(item.index);
     setEditingText(item.text);
+  }
+  function addSubitem(item) {
+    setEditingIndex(null);
+    setSubitemParent(item.index);
+    setSubitemText('');
   }
   return (() => {
     var _el$ = _tmpl$5$3(),
@@ -4437,7 +4511,7 @@ function ListView(props) {
         var _el$7 = _tmpl$$3();
         _el$7.$$click = openSource;
         insert(_el$7, () => hasSourceDraft() ? 'Resume Markdown draft' : 'Edit Markdown');
-        createRenderEffect(() => _el$7.disabled = busy() || uncertain());
+        createRenderEffect(() => _el$7.disabled = busy() || props.writing || uncertain());
         return _el$7;
       }
     }), null);
@@ -4484,7 +4558,7 @@ function ListView(props) {
                 get each() {
                   return parsed().items;
                 },
-                children: item => (() => {
+                children: item => [(() => {
                   var _el$19 = _tmpl$0$2();
                   insert(_el$19, createComponent(Show, {
                     get when() {
@@ -4492,54 +4566,59 @@ function ListView(props) {
                     },
                     get fallback() {
                       return [(() => {
-                        var _el$24 = _tmpl$1$2(),
-                          _el$25 = _el$24.firstChild,
-                          _el$26 = _el$25.nextSibling;
-                        _el$25.addEventListener("change", event => {
+                        var _el$28 = _tmpl$10$2(),
+                          _el$29 = _el$28.firstChild,
+                          _el$30 = _el$29.nextSibling;
+                        _el$29.addEventListener("change", event => {
                           event.currentTarget.checked = item.checked;
                           write(changeChecklistItem(props.topic.description, item.index, 'toggle'));
                         });
-                        insert(_el$26, () => item.text);
-                        createRenderEffect(_p$ => {
-                          var _v$9 = busy() || uncertain(),
-                            _v$0 = !!item.checked;
-                          _v$9 !== _p$.e && (_el$25.disabled = _p$.e = _v$9);
-                          _v$0 !== _p$.t && _el$26.classList.toggle("is-complete", _p$.t = _v$0);
-                          return _p$;
-                        }, {
-                          e: undefined,
-                          t: undefined
-                        });
-                        createRenderEffect(() => _el$25.checked = item.checked);
-                        return _el$24;
-                      })(), (() => {
-                        var _el$27 = _tmpl$10$2();
-                        _el$27.$$click = () => editItem(item);
-                        createRenderEffect(_p$ => {
-                          var _v$1 = busy() || uncertain(),
-                            _v$10 = `Edit ${item.text}`;
-                          _v$1 !== _p$.e && (_el$27.disabled = _p$.e = _v$1);
-                          _v$10 !== _p$.t && setAttribute(_el$27, "aria-label", _p$.t = _v$10);
-                          return _p$;
-                        }, {
-                          e: undefined,
-                          t: undefined
-                        });
-                        return _el$27;
-                      })(), (() => {
-                        var _el$28 = _tmpl$11$2();
-                        _el$28.$$click = () => write(changeChecklistItem(props.topic.description, item.index, 'remove'));
-                        createRenderEffect(_p$ => {
-                          var _v$11 = busy() || uncertain(),
-                            _v$12 = `Remove ${item.text}`;
-                          _v$11 !== _p$.e && (_el$28.disabled = _p$.e = _v$11);
-                          _v$12 !== _p$.t && setAttribute(_el$28, "aria-label", _p$.t = _v$12);
-                          return _p$;
-                        }, {
-                          e: undefined,
-                          t: undefined
-                        });
+                        insert(_el$30, () => item.text);
+                        createRenderEffect(() => _el$29.disabled = busy() || props.writing || uncertain());
+                        createRenderEffect(() => _el$29.checked = item.checked);
                         return _el$28;
+                      })(), (() => {
+                        var _el$31 = _tmpl$11$2();
+                        _el$31.$$click = () => addSubitem(item);
+                        createRenderEffect(_p$ => {
+                          var _v$14 = busy() || props.writing || uncertain(),
+                            _v$15 = `Add subitem to ${item.text}`;
+                          _v$14 !== _p$.e && (_el$31.disabled = _p$.e = _v$14);
+                          _v$15 !== _p$.t && setAttribute(_el$31, "aria-label", _p$.t = _v$15);
+                          return _p$;
+                        }, {
+                          e: undefined,
+                          t: undefined
+                        });
+                        return _el$31;
+                      })(), (() => {
+                        var _el$32 = _tmpl$12$1();
+                        _el$32.$$click = () => editItem(item);
+                        createRenderEffect(_p$ => {
+                          var _v$16 = busy() || props.writing || uncertain(),
+                            _v$17 = `Edit ${item.text}`;
+                          _v$16 !== _p$.e && (_el$32.disabled = _p$.e = _v$16);
+                          _v$17 !== _p$.t && setAttribute(_el$32, "aria-label", _p$.t = _v$17);
+                          return _p$;
+                        }, {
+                          e: undefined,
+                          t: undefined
+                        });
+                        return _el$32;
+                      })(), (() => {
+                        var _el$33 = _tmpl$13$1();
+                        _el$33.$$click = () => write(changeChecklistItem(props.topic.description, item.index, 'remove'), () => setSubitemParent(null));
+                        createRenderEffect(_p$ => {
+                          var _v$18 = busy() || props.writing || uncertain(),
+                            _v$19 = `Remove ${item.text}`;
+                          _v$18 !== _p$.e && (_el$33.disabled = _p$.e = _v$18);
+                          _v$19 !== _p$.t && setAttribute(_el$33, "aria-label", _p$.t = _v$19);
+                          return _p$;
+                        }, {
+                          e: undefined,
+                          t: undefined
+                        });
+                        return _el$33;
                       })()];
                     },
                     get children() {
@@ -4570,15 +4649,65 @@ function ListView(props) {
                       return _el$20;
                     }
                   }));
-                  createRenderEffect(() => _el$19.classList.toggle("is-pending", !!busy()));
+                  createRenderEffect(_p$ => {
+                    var _v$9 = !!busy(),
+                      _v$0 = `${Math.min(item.depth, 8) * 20}px`;
+                    _v$9 !== _p$.e && _el$19.classList.toggle("is-pending", _p$.e = _v$9);
+                    _v$0 !== _p$.t && setStyleProperty(_el$19, "padding-left", _p$.t = _v$0);
+                    return _p$;
+                  }, {
+                    e: undefined,
+                    t: undefined
+                  });
                   return _el$19;
-                })()
+                })(), createComponent(Show, {
+                  get when() {
+                    return subitemParent() === item.index;
+                  },
+                  get children() {
+                    var _el$24 = _tmpl$1$2(),
+                      _el$25 = _el$24.firstChild,
+                      _el$26 = _el$25.nextSibling,
+                      _el$27 = _el$26.nextSibling;
+                    _el$24.addEventListener("submit", event => {
+                      event.preventDefault();
+                      if (subitemText().trim()) write(insertChecklistChild(props.topic.description, item.index, subitemText()), () => {
+                        setSubitemParent(null);
+                        setSubitemText('');
+                      });
+                    });
+                    _el$25.$$input = event => setSubitemText(event.currentTarget.value);
+                    use(element => requestAnimationFrame(() => element.focus()), _el$25);
+                    _el$27.$$click = () => setSubitemParent(null);
+                    createRenderEffect(_p$ => {
+                      var _v$1 = `${Math.min(item.depth + 1, 8) * 20}px`,
+                        _v$10 = `New subitem for ${item.text}`,
+                        _v$11 = busy() || props.writing || uncertain(),
+                        _v$12 = busy() || props.writing || uncertain() || !subitemText().trim(),
+                        _v$13 = busy();
+                      _v$1 !== _p$.e && setStyleProperty(_el$24, "margin-left", _p$.e = _v$1);
+                      _v$10 !== _p$.t && setAttribute(_el$25, "aria-label", _p$.t = _v$10);
+                      _v$11 !== _p$.a && (_el$25.disabled = _p$.a = _v$11);
+                      _v$12 !== _p$.o && (_el$26.disabled = _p$.o = _v$12);
+                      _v$13 !== _p$.i && (_el$27.disabled = _p$.i = _v$13);
+                      return _p$;
+                    }, {
+                      e: undefined,
+                      t: undefined,
+                      a: undefined,
+                      o: undefined,
+                      i: undefined
+                    });
+                    createRenderEffect(() => _el$25.value = subitemText());
+                    return _el$24;
+                  }
+                })]
               });
             }
           }), _el$15);
           insert(_el$13, createComponent(Show, {
             get when() {
-              return parsed().lines.some(line => line.trim() && !/^\s*[-*+]\s+\[[ xX]\]\s+/.test(line));
+              return parsed().lines.slice((parsed().items[0]?.index ?? parsed().lines.length) + 1).some(line => line.trim() && !/^\s*[-*+]\s+\[[ xX]\]\s+/.test(line));
             },
             get children() {
               return _tmpl$6$3();
@@ -4591,7 +4720,7 @@ function ListView(props) {
           _el$16.$$input = event => setNewItem(event.currentTarget.value);
           createRenderEffect(_p$ => {
             var _v$4 = busy() || uncertain(),
-              _v$5 = busy() || uncertain() || !newItem().trim();
+              _v$5 = busy() || props.writing || uncertain() || !newItem().trim();
             _v$4 !== _p$.e && (_el$16.disabled = _p$.e = _v$4);
             _v$5 !== _p$.t && (_el$17.disabled = _p$.t = _v$5);
             return _p$;
@@ -4654,10 +4783,14 @@ var _tmpl$$2 = /*#__PURE__*/template(`<p class=talk-description-error role=alert
   _tmpl$3$2 = /*#__PURE__*/template(`<button type=button class=talk-description-delete>Delete`),
   _tmpl$4$2 = /*#__PURE__*/template(`<form class=talk-description-form><textarea aria-label="Topic description"rows=5></textarea><div class=talk-description-actions><button type=button class=talk-description-cancel>Cancel`),
   _tmpl$5$2 = /*#__PURE__*/template(`<div class=talk-description>`),
-  _tmpl$6$2 = /*#__PURE__*/template(`<p class="muted talk-description-text">`),
+  _tmpl$6$2 = /*#__PURE__*/template(`<p class=talk-description-text>`),
   _tmpl$7$2 = /*#__PURE__*/template(`<div class=talk-description-display><button type=button class=talk-description-edit>`),
   _tmpl$8$2 = /*#__PURE__*/template(`<button type=submit>`);
 function TalkDescription(props) {
+  const isList = () => props.topic.kind === 'list';
+  const description = body => isList() ? listDescription(body) : body;
+  const read = () => isList() ? props.api.readList(props.topic.id) : props.api.readTalk(props.topic.id);
+  const update = (body, expectedBody) => isList() ? props.api.updateList(props.topic.id, body, expectedBody) : props.api.updateTalkDescription(props.topic.id, body, expectedBody);
   const [editing, setEditing] = createSignal(false);
   const [draft, setDraft] = createSignal('');
   const [base, setBase] = createSignal('');
@@ -4666,12 +4799,13 @@ function TalkDescription(props) {
   const [error, setError] = createSignal('');
   const [pendingBody, setPendingBody] = createSignal('');
   async function edit() {
+    if (busy() || props.writing) return;
     setBusy(true);
     setError('');
     try {
-      const latest = await props.api.readTalk(props.topic.id);
+      const latest = await read();
       setBase(latest.description);
-      setDraft(latest.description);
+      setDraft(description(latest.description));
       setEditing(true);
     } catch (failure) {
       setError(failure.message);
@@ -4679,14 +4813,15 @@ function TalkDescription(props) {
       setBusy(false);
     }
   }
-  async function write(nextBody) {
-    if (busy() || uncertain() || nextBody === base()) return;
+  async function write(nextText) {
+    const nextBody = isList() ? replaceListDescription(base(), nextText) : nextText;
+    if (busy() || props.writing || uncertain() || nextBody === base()) return;
     setPendingBody(nextBody);
     setBusy(true);
     props.onBusyChange(true);
     setError('');
     try {
-      const updated = await props.api.updateTalkDescription(props.topic.id, nextBody, base());
+      const updated = await update(nextBody, base());
       props.onUpdated(updated);
       setEditing(false);
     } catch (failure) {
@@ -4705,7 +4840,7 @@ function TalkDescription(props) {
     setBusy(true);
     setError('');
     try {
-      const latest = await props.api.readTalk(props.topic.id);
+      const latest = await read();
       props.onUpdated(latest);
       if (latest.description === pendingBody()) {
         setEditing(false);
@@ -4745,22 +4880,22 @@ function TalkDescription(props) {
             _el$1 = _el$9.firstChild;
           insert(_el$9, createComponent(Show, {
             get when() {
-              return props.topic.description;
+              return description(props.topic.description);
             },
             get children() {
               var _el$0 = _tmpl$6$2();
-              insert(_el$0, () => props.topic.description);
+              insert(_el$0, () => description(props.topic.description));
               return _el$0;
             }
           }), _el$1);
           _el$1.$$click = edit;
           insert(_el$1, (() => {
             var _c$ = memo(() => !!busy());
-            return () => _c$() ? 'Loading…' : props.topic.description ? 'Edit' : '+ add topic body';
+            return () => _c$() ? 'Loading…' : description(props.topic.description) ? 'Edit' : '+ add topic body';
           })());
           createRenderEffect(_p$ => {
-            var _v$3 = !!Boolean(props.topic.description),
-              _v$4 = busy();
+            var _v$3 = !!Boolean(description(props.topic.description)),
+              _v$4 = busy() || props.writing;
             _v$3 !== _p$.e && _el$9.classList.toggle("has-description", _p$.e = _v$3);
             _v$4 !== _p$.t && (_el$1.disabled = _p$.t = _v$4);
             return _p$;
@@ -4804,7 +4939,7 @@ function TalkDescription(props) {
         };
         insert(_el$5, createComponent(Show, {
           get when() {
-            return base();
+            return description(base());
           },
           get children() {
             var _el$8 = _tmpl$3$2();
@@ -5532,37 +5667,36 @@ var _tmpl$ = /*#__PURE__*/template(`<section class=app-shell><aside class=sideba
   _tmpl$31 = /*#__PURE__*/template(`<button type=button class=topic-expand>`),
   _tmpl$32 = /*#__PURE__*/template(`<small role=status>`),
   _tmpl$33 = /*#__PURE__*/template(`<button type=button class=add-subtopic-button title="Create subtopic"><span aria-hidden=true>+`),
-  _tmpl$34 = /*#__PURE__*/template(`<div class=channel-row><button type=button class=channel-button></button><button type=button class=remove-topic-button aria-haspopup=dialog><span aria-hidden=true>−`),
+  _tmpl$34 = /*#__PURE__*/template(`<div class=channel-row><button type=button class=channel-button><span class=channel-name></span></button><button type=button class=remove-topic-button aria-haspopup=dialog><span aria-hidden=true>−`),
   _tmpl$35 = /*#__PURE__*/template(`<span class=topic-expand aria-hidden=true>`),
-  _tmpl$36 = /*#__PURE__*/template(`<div class="channel-row is-pending"><span class=topic-expand aria-hidden=true></span><div class=channel-button><small role=status>`),
+  _tmpl$36 = /*#__PURE__*/template(`<div class="channel-row is-pending"><span class=topic-expand aria-hidden=true></span><div class=channel-button><span class=channel-name></span><small role=status>`),
   _tmpl$37 = /*#__PURE__*/template(`<small>Closed`),
   _tmpl$38 = /*#__PURE__*/template(`<button type=button class=project-list-item><span>`),
   _tmpl$39 = /*#__PURE__*/template(`<p>`),
   _tmpl$40 = /*#__PURE__*/template(`<button type=button class=milestone-list-item><span class=milestone-list-title></span><progress class=milestone-progress max=100>`),
-  _tmpl$41 = /*#__PURE__*/template(`<p class=muted>`),
-  _tmpl$42 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ Back to project`),
-  _tmpl$43 = /*#__PURE__*/template(`<option>Goal #`),
-  _tmpl$44 = /*#__PURE__*/template(`<label class=topic-milestone-select><span class=sr-only>Goal</span><span class=topic-milestone-value aria-hidden=true></span><svg width=12 height=12 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg><select aria-label="Add to goal"><option value>None`),
-  _tmpl$45 = /*#__PURE__*/template(`<form class=topic-tag-form aria-label="Add topic tag"><input type=text aria-label="Tag name"placeholder="Tag name"list=topic-tag-suggestions maxlength=50 required><datalist id=topic-tag-suggestions></datalist><button type=submit>Add</button><button type=button aria-label="Cancel tag">×`),
-  _tmpl$46 = /*#__PURE__*/template(`<div class=message-list role=log aria-label=Messages aria-live=polite aria-relevant=additions>`),
-  _tmpl$47 = /*#__PURE__*/template(`<form class=composer><div class=composer-box><textarea placeholder="send message"rows=2></textarea><button type=submit>Send <span aria-hidden=true>↗</span></button></div><p class=composer-hint>Enter to send · Shift + Enter for a new line <span>/`),
-  _tmpl$48 = /*#__PURE__*/template(`<section class=chat-panel><header class=chat-header><h2></h2><div class=chat-header-actions><a class=preview-badge target=_blank rel=noreferrer>GitHub ↗</a></div></header><div class=chat-topic-controls><button type=button class=topic-status aria-haspopup=dialog><span class=topic-status-dot aria-hidden=true></span></button></div><div class=topic-tags aria-label="Topic tags">`),
-  _tmpl$49 = /*#__PURE__*/template(`<section class="chat-panel empty-chat"><h2></h2><p class=muted></p><button type=button>New topic`),
-  _tmpl$50 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ `),
-  _tmpl$51 = /*#__PURE__*/template(`<span class=topic-tag><span class=topic-tag-dot aria-hidden=true></span><span class=topic-tag-name></span><button type=button>×`),
-  _tmpl$52 = /*#__PURE__*/template(`<button type=button class=add-tag-button>+ Tag`),
-  _tmpl$53 = /*#__PURE__*/template(`<a class=message-reply-reference target=_blank rel="noopener noreferrer">↳ Replying to `),
-  _tmpl$54 = /*#__PURE__*/template(`<article class=message><span class=avatar aria-hidden=true></span><div class=message-content><div class=message-meta><span class=message-author></span><time></time></div><div class=message-reactions role=group aria-label=Reactions><button type=button class=reaction-add aria-label="Add or remove a reaction"aria-haspopup=dialog title=React><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round aria-hidden=true><path d="M21 13a9 9 0 1 1-10-10M8 14c1.8 2 6.2 2 8 0M17 4h6m-3-3v6"></path><path d="M8 9h.01M14 9h.01"stroke-width=3></path></svg></button><button type=button class=message-reply title="Quote reply">Reply`),
-  _tmpl$55 = /*#__PURE__*/template(`<span role=img>`),
-  _tmpl$56 = /*#__PURE__*/template(`<article class="message is-pending"><span class="avatar avatar-you"aria-hidden=true>Y</span><div class=message-content><div class=message-meta><span class=message-author>You</span><span class=delivery-state role=status>`),
-  _tmpl$57 = /*#__PURE__*/template(`<form><h2 id=topic-status-title></h2><div class=dialog-actions><button type=button class=dialog-cancel autofocus>Cancel</button><button type=submit>`),
-  _tmpl$58 = /*#__PURE__*/template(`<button type=button class=reaction-choice>`),
-  _tmpl$59 = /*#__PURE__*/template(`<button type=button>Yes`),
-  _tmpl$60 = /*#__PURE__*/template(`<button type=button>No`),
-  _tmpl$61 = /*#__PURE__*/template(`<div><h2 id=remove-topic-title></h2><div class=dialog-actions>`),
-  _tmpl$62 = /*#__PURE__*/template(`<button type=button>Archive`),
-  _tmpl$63 = /*#__PURE__*/template(`<button type=button>Delete`),
-  _tmpl$64 = /*#__PURE__*/template(`<button type=button autofocus>Cancel`);
+  _tmpl$41 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ Back to project`),
+  _tmpl$42 = /*#__PURE__*/template(`<option>Goal #`),
+  _tmpl$43 = /*#__PURE__*/template(`<label class=topic-milestone-select><span class=sr-only>Goal</span><span class=topic-milestone-value aria-hidden=true></span><svg width=12 height=12 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d="m6 9 6 6 6-6"></path></svg><select aria-label="Add to goal"><option value>None`),
+  _tmpl$44 = /*#__PURE__*/template(`<form class=topic-tag-form aria-label="Add topic tag"><input type=text aria-label="Tag name"placeholder="Tag name"list=topic-tag-suggestions maxlength=50 required><datalist id=topic-tag-suggestions></datalist><button type=submit>Add</button><button type=button aria-label="Cancel tag">×`),
+  _tmpl$45 = /*#__PURE__*/template(`<div class=message-list role=log aria-label=Messages aria-live=polite aria-relevant=additions>`),
+  _tmpl$46 = /*#__PURE__*/template(`<form class=composer><div class=composer-box><textarea placeholder="send message"rows=2></textarea><button type=submit>Send <span aria-hidden=true>↗</span></button></div><p class=composer-hint>Enter to send · Shift + Enter for a new line <span>/`),
+  _tmpl$47 = /*#__PURE__*/template(`<section class=chat-panel><header class=chat-header><h2></h2><div class=chat-header-actions><a class=preview-badge target=_blank rel=noreferrer>GitHub ↗</a></div></header><div class=chat-topic-controls><button type=button class=topic-status aria-haspopup=dialog><span class=topic-status-dot aria-hidden=true></span></button></div><div class=topic-tags aria-label="Topic tags">`),
+  _tmpl$48 = /*#__PURE__*/template(`<section class="chat-panel empty-chat"><h2></h2><p class=muted></p><button type=button>New topic`),
+  _tmpl$49 = /*#__PURE__*/template(`<button type=button class=parent-topic-link>‹ `),
+  _tmpl$50 = /*#__PURE__*/template(`<span class=topic-tag><span class=topic-tag-dot aria-hidden=true></span><span class=topic-tag-name></span><button type=button>×`),
+  _tmpl$51 = /*#__PURE__*/template(`<button type=button class=add-tag-button>+ Tag`),
+  _tmpl$52 = /*#__PURE__*/template(`<a class=message-reply-reference target=_blank rel="noopener noreferrer">↳ Replying to `),
+  _tmpl$53 = /*#__PURE__*/template(`<article class=message><span class=avatar aria-hidden=true></span><div class=message-content><div class=message-meta><span class=message-author></span><time></time></div><div class=message-reactions role=group aria-label=Reactions><button type=button class=reaction-add aria-label="Add or remove a reaction"aria-haspopup=dialog title=React><svg width=16 height=16 viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=1.5 stroke-linecap=round aria-hidden=true><path d="M21 13a9 9 0 1 1-10-10M8 14c1.8 2 6.2 2 8 0M17 4h6m-3-3v6"></path><path d="M8 9h.01M14 9h.01"stroke-width=3></path></svg></button><button type=button class=message-reply title="Quote reply">Reply`),
+  _tmpl$54 = /*#__PURE__*/template(`<span role=img>`),
+  _tmpl$55 = /*#__PURE__*/template(`<article class="message is-pending"><span class="avatar avatar-you"aria-hidden=true>Y</span><div class=message-content><div class=message-meta><span class=message-author>You</span><span class=delivery-state role=status>`),
+  _tmpl$56 = /*#__PURE__*/template(`<form><h2 id=topic-status-title></h2><div class=dialog-actions><button type=button class=dialog-cancel autofocus>Cancel</button><button type=submit>`),
+  _tmpl$57 = /*#__PURE__*/template(`<button type=button class=reaction-choice>`),
+  _tmpl$58 = /*#__PURE__*/template(`<button type=button>Yes`),
+  _tmpl$59 = /*#__PURE__*/template(`<button type=button>No`),
+  _tmpl$60 = /*#__PURE__*/template(`<div><h2 id=remove-topic-title></h2><div class=dialog-actions>`),
+  _tmpl$61 = /*#__PURE__*/template(`<button type=button>Archive`),
+  _tmpl$62 = /*#__PURE__*/template(`<button type=button>Delete`),
+  _tmpl$63 = /*#__PURE__*/template(`<button type=button autofocus>Cancel`);
 const formatTime = date => date.toLocaleTimeString([], {
   hour: '2-digit',
   minute: '2-digit'
@@ -5591,8 +5725,12 @@ function App(props = {}) {
   try {
     const requested = new URL(window.location.href).searchParams.get('repo');
     if (requested) initial = parseRepository(requested);else {
-      const saved = sessionStorage.getItem(siteSelectionKey);
-      if (saved) initial = parseRepository(saved);
+      const sessionSaved = sessionStorage.getItem(siteSelectionKey);
+      const saved = sessionSaved || (defaults === null ? storage?.getItem(siteSelectionKey) : null);
+      if (saved) {
+        initial = parseRepository(saved);
+        if (defaults === null && sessionSaved) storage?.setItem(siteSelectionKey, repositoryName(initial));
+      }
     }
   } catch {/* Invalid saved selections fall back to local configuration. */}
   let restoredRecentRepositories = [];
@@ -5616,7 +5754,12 @@ function App(props = {}) {
     } catch {/* Repository switching works without saved history. */}
     try {
       sessionStorage.setItem(siteSelectionKey, repositoryName(next));
-    } catch {/* Switching still works without browser storage. */}
+    } catch {/* Switching still works without session storage. */}
+    if (defaults === null) {
+      try {
+        storage?.setItem(siteSelectionKey, repositoryName(next));
+      } catch {/* The central page still works without persistent storage. */}
+    }
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('repo', repositoryName(next));
@@ -5645,15 +5788,19 @@ function App(props = {}) {
   function forgetRepository(target) {
     if (!canForgetRepository(target, defaults)) return;
     credentials.forget(target);
+    for (const getSource of [() => sessionStorage, () => storage]) {
+      try {
+        const source = getSource();
+        const saved = source?.getItem(siteSelectionKey);
+        if (saved && repositoryKey(parseRepository(saved)) === repositoryKey(target)) source.removeItem(siteSelectionKey);
+      } catch {/* Forgetting the repository still works without browser storage. */}
+    }
     const recent = recentRepositoriesAfterForget(recentRepositories(), target);
     try {
       storage?.setItem(recentRepositoriesKey, JSON.stringify(recent.map(repositoryName)));
     } catch {/* Removing this repository still works for the current session. */}
     const isActive = repository() && repositoryKey(repository()) === repositoryKey(target);
     if (isActive) {
-      try {
-        sessionStorage.removeItem(siteSelectionKey);
-      } catch {/* The default still opens on the next fresh session. */}
       try {
         const url = new URL(window.location.href);
         url.searchParams.delete('repo');
@@ -7155,7 +7302,8 @@ function Workspace(props) {
       children: item => (() => {
         var _el$118 = _tmpl$34(),
           _el$120 = _el$118.firstChild,
-          _el$123 = _el$120.nextSibling;
+          _el$121 = _el$120.firstChild,
+          _el$124 = _el$120.nextSibling;
         insert(_el$118, createComponent(Show, {
           get when() {
             return item.hasChildren;
@@ -7185,16 +7333,16 @@ function Workspace(props) {
           get kind() {
             return item.kind;
           }
-        }), null);
-        insert(_el$120, () => item.name, null);
+        }), _el$121);
+        insert(_el$121, () => item.name);
         insert(_el$120, createComponent(Show, {
           get when() {
             return closing()[item.id] || item.state === 'closed';
           },
           get children() {
-            var _el$121 = _tmpl$32();
-            insert(_el$121, () => statusLabel(item.id) || 'Closed');
-            return _el$121;
+            var _el$122 = _tmpl$32();
+            insert(_el$122, () => statusLabel(item.id) || 'Closed');
+            return _el$122;
           }
         }), null);
         insert(_el$118, createComponent(Show, {
@@ -7202,39 +7350,41 @@ function Workspace(props) {
             return item.kind !== 'discussion';
           },
           get children() {
-            var _el$122 = _tmpl$33();
-            _el$122.$$click = () => startTopic(item);
+            var _el$123 = _tmpl$33();
+            _el$123.$$click = () => startTopic(item);
             createRenderEffect(_p$ => {
               var _v$39 = Boolean(closing()[item.id]) || creating() || createUncertain() || !isConfigured,
                 _v$40 = `Create subtopic under ${item.name}`;
-              _v$39 !== _p$.e && (_el$122.disabled = _p$.e = _v$39);
-              _v$40 !== _p$.t && setAttribute(_el$122, "aria-label", _p$.t = _v$40);
+              _v$39 !== _p$.e && (_el$123.disabled = _p$.e = _v$39);
+              _v$40 !== _p$.t && setAttribute(_el$123, "aria-label", _p$.t = _v$40);
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$122;
+            return _el$123;
           }
-        }), _el$123);
-        _el$123.$$click = () => requestRemoval(item);
+        }), _el$124);
+        _el$124.$$click = () => requestRemoval(item);
         createRenderEffect(_p$ => {
           var _v$41 = `${Math.min(item.depth, 5) * 16}px`,
             _v$42 = !!(activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id),
             _v$43 = !!(Boolean(closing()[item.id]) || item.syncState === 'confirming' && item.dimSidebar !== false),
             _v$44 = closing()[item.id]?.status === 'pending' || item.syncState === 'confirming',
-            _v$45 = activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined,
-            _v$46 = Boolean(closing()[item.id]),
-            _v$47 = `Remove topic ${item.name}`,
-            _v$48 = `Remove topic ${item.name}`;
+            _v$45 = item.name,
+            _v$46 = activeProjectId() === null && activeMilestoneId() === null && activeId() === item.id ? 'page' : undefined,
+            _v$47 = Boolean(closing()[item.id]),
+            _v$48 = `Remove topic ${item.name}`,
+            _v$49 = `Remove topic ${item.name}`;
           _v$41 !== _p$.e && setStyleProperty(_el$118, "margin-left", _p$.e = _v$41);
           _v$42 !== _p$.t && _el$118.classList.toggle("is-active", _p$.t = _v$42);
           _v$43 !== _p$.a && _el$118.classList.toggle("is-pending", _p$.a = _v$43);
           _v$44 !== _p$.o && setAttribute(_el$118, "aria-busy", _p$.o = _v$44);
-          _v$45 !== _p$.i && setAttribute(_el$120, "aria-current", _p$.i = _v$45);
-          _v$46 !== _p$.n && (_el$123.disabled = _p$.n = _v$46);
-          _v$47 !== _p$.s && setAttribute(_el$123, "aria-label", _p$.s = _v$47);
-          _v$48 !== _p$.h && setAttribute(_el$123, "title", _p$.h = _v$48);
+          _v$45 !== _p$.i && setAttribute(_el$120, "title", _p$.i = _v$45);
+          _v$46 !== _p$.n && setAttribute(_el$120, "aria-current", _p$.n = _v$46);
+          _v$47 !== _p$.s && (_el$124.disabled = _p$.s = _v$47);
+          _v$48 !== _p$.h && setAttribute(_el$124, "aria-label", _p$.h = _v$48);
+          _v$49 !== _p$.r && setAttribute(_el$124, "title", _p$.r = _v$49);
           return _p$;
         }, {
           e: undefined,
@@ -7244,7 +7394,8 @@ function Workspace(props) {
           i: undefined,
           n: undefined,
           s: undefined,
-          h: undefined
+          h: undefined,
+          r: undefined
         });
         return _el$118;
       })()
@@ -7254,28 +7405,29 @@ function Workspace(props) {
         return pendingTopic();
       },
       children: pending => (() => {
-        var _el$125 = _tmpl$36(),
-          _el$126 = _el$125.firstChild,
-          _el$127 = _el$126.nextSibling,
-          _el$128 = _el$127.firstChild;
-        insert(_el$127, createComponent(TopicMarker, {
+        var _el$126 = _tmpl$36(),
+          _el$127 = _el$126.firstChild,
+          _el$128 = _el$127.nextSibling,
+          _el$129 = _el$128.firstChild,
+          _el$130 = _el$129.nextSibling;
+        insert(_el$128, createComponent(TopicMarker, {
           get kind() {
             return pending().kind;
           }
-        }), _el$128);
-        insert(_el$127, () => pending().name, _el$128);
-        insert(_el$128, () => pending().status === 'creating' ? 'Creating…' : 'Unconfirmed');
+        }), _el$129);
+        insert(_el$129, () => pending().name);
+        insert(_el$130, () => pending().status === 'creating' ? 'Creating…' : 'Unconfirmed');
         createRenderEffect(_p$ => {
-          var _v$49 = pending().parentId ? `${Math.min((visibleTopics().find(item => item.id === pending().parentId)?.depth ?? 0) + 1, 5) * 16}px` : '0',
-            _v$50 = pending().status === 'creating';
-          _v$49 !== _p$.e && setStyleProperty(_el$125, "margin-left", _p$.e = _v$49);
-          _v$50 !== _p$.t && setAttribute(_el$125, "aria-busy", _p$.t = _v$50);
+          var _v$50 = pending().parentId ? `${Math.min((visibleTopics().find(item => item.id === pending().parentId)?.depth ?? 0) + 1, 5) * 16}px` : '0',
+            _v$51 = pending().status === 'creating';
+          _v$50 !== _p$.e && setStyleProperty(_el$126, "margin-left", _p$.e = _v$50);
+          _v$51 !== _p$.t && setAttribute(_el$126, "aria-busy", _p$.t = _v$51);
           return _p$;
         }, {
           e: undefined,
           t: undefined
         });
-        return _el$125;
+        return _el$126;
       })()
     }), null);
     insert(_el$54, createComponent(Show, {
@@ -7304,11 +7456,11 @@ function Workspace(props) {
             return projects();
           },
           children: item => (() => {
-            var _el$129 = _tmpl$38(),
-              _el$130 = _el$129.firstChild;
-            _el$129.$$click = () => selectProject(item.id);
-            insert(_el$130, () => item.name);
-            insert(_el$129, createComponent(Show, {
+            var _el$131 = _tmpl$38(),
+              _el$132 = _el$131.firstChild;
+            _el$131.$$click = () => selectProject(item.id);
+            insert(_el$132, () => item.name);
+            insert(_el$131, createComponent(Show, {
               get when() {
                 return item.closed;
               },
@@ -7317,16 +7469,16 @@ function Workspace(props) {
               }
             }), null);
             createRenderEffect(_p$ => {
-              var _v$51 = !!(activeProjectId() === item.id),
-                _v$52 = activeProjectId() === item.id ? 'page' : undefined;
-              _v$51 !== _p$.e && _el$129.classList.toggle("is-active", _p$.e = _v$51);
-              _v$52 !== _p$.t && setAttribute(_el$129, "aria-current", _p$.t = _v$52);
+              var _v$52 = !!(activeProjectId() === item.id),
+                _v$53 = activeProjectId() === item.id ? 'page' : undefined;
+              _v$52 !== _p$.e && _el$131.classList.toggle("is-active", _p$.e = _v$52);
+              _v$53 !== _p$.t && setAttribute(_el$131, "aria-current", _p$.t = _v$53);
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$129;
+            return _el$131;
           })()
         }));
         createRenderEffect(_p$ => {
@@ -7357,9 +7509,9 @@ function Workspace(props) {
       },
       get fallback() {
         return (() => {
-          var _el$132 = _tmpl$39();
-          insert(_el$132, () => !isConfigured ? 'Connect to GitHub to load goals.' : milestonesLoaded() ? 'No goals yet.' : 'Loading goals…');
-          return _el$132;
+          var _el$134 = _tmpl$39();
+          insert(_el$134, () => !isConfigured ? 'Connect to GitHub to load goals.' : milestonesLoaded() ? 'No goals yet.' : 'Loading goals…');
+          return _el$134;
         })();
       },
       get children() {
@@ -7369,12 +7521,12 @@ function Workspace(props) {
             return milestones();
           },
           children: item => (() => {
-            var _el$133 = _tmpl$40(),
-              _el$134 = _el$133.firstChild,
-              _el$136 = _el$134.nextSibling;
-            _el$133.$$click = () => selectMilestone(item.id);
-            insert(_el$134, () => item.name, null);
-            insert(_el$134, createComponent(Show, {
+            var _el$135 = _tmpl$40(),
+              _el$136 = _el$135.firstChild,
+              _el$138 = _el$136.nextSibling;
+            _el$135.$$click = () => selectMilestone(item.id);
+            insert(_el$136, () => item.name, null);
+            insert(_el$136, createComponent(Show, {
               get when() {
                 return item.state === 'closed';
               },
@@ -7383,14 +7535,14 @@ function Workspace(props) {
               }
             }), null);
             createRenderEffect(_p$ => {
-              var _v$53 = !!(activeMilestoneId() === item.id),
-                _v$54 = !!(item.syncState === 'confirming'),
-                _v$55 = activeMilestoneId() === item.id ? 'page' : undefined,
-                _v$56 = `${item.name}: ${currentGoalProgress(item).complete} of ${currentGoalProgress(item).total} complete`;
-              _v$53 !== _p$.e && _el$133.classList.toggle("is-active", _p$.e = _v$53);
-              _v$54 !== _p$.t && _el$133.classList.toggle("is-pending", _p$.t = _v$54);
-              _v$55 !== _p$.a && setAttribute(_el$133, "aria-current", _p$.a = _v$55);
-              _v$56 !== _p$.o && setAttribute(_el$136, "aria-label", _p$.o = _v$56);
+              var _v$54 = !!(activeMilestoneId() === item.id),
+                _v$55 = !!(item.syncState === 'confirming'),
+                _v$56 = activeMilestoneId() === item.id ? 'page' : undefined,
+                _v$57 = `${item.name}: ${currentGoalProgress(item).complete} of ${currentGoalProgress(item).total} complete`;
+              _v$54 !== _p$.e && _el$135.classList.toggle("is-active", _p$.e = _v$54);
+              _v$55 !== _p$.t && _el$135.classList.toggle("is-pending", _p$.t = _v$55);
+              _v$56 !== _p$.a && setAttribute(_el$135, "aria-current", _p$.a = _v$56);
+              _v$57 !== _p$.o && setAttribute(_el$138, "aria-label", _p$.o = _v$57);
               return _p$;
             }, {
               e: undefined,
@@ -7398,8 +7550,8 @@ function Workspace(props) {
               a: undefined,
               o: undefined
             });
-            createRenderEffect(() => _el$136.value = currentGoalProgress(item).percent);
-            return _el$133;
+            createRenderEffect(() => _el$138.value = currentGoalProgress(item).percent);
+            return _el$135;
           })()
         }));
         return _el$91;
@@ -7425,51 +7577,51 @@ function Workspace(props) {
               },
               get fallback() {
                 return (() => {
-                  var _el$173 = _tmpl$49(),
-                    _el$174 = _el$173.firstChild,
-                    _el$175 = _el$174.nextSibling,
-                    _el$177 = _el$175.nextSibling;
-                  insert(_el$174, () => !isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet');
-                  insert(_el$175, !isConfigured ? 'Open the repository menu and choose Permit to connect.' : 'Create a topic to start a conversation.');
-                  insert(_el$173, createComponent(Show, {
+                  var _el$175 = _tmpl$48(),
+                    _el$176 = _el$175.firstChild,
+                    _el$177 = _el$176.nextSibling,
+                    _el$179 = _el$177.nextSibling;
+                  insert(_el$176, () => !isConfigured ? 'Connect to GitHub' : syncing() ? 'Loading topics…' : 'No topics yet');
+                  insert(_el$177, !isConfigured ? 'Open the repository menu and choose Permit to connect.' : 'Create a topic to start a conversation.');
+                  insert(_el$175, createComponent(Show, {
                     get when() {
                       return error();
                     },
                     get children() {
-                      var _el$176 = _tmpl$2();
-                      insert(_el$176, error);
-                      return _el$176;
+                      var _el$178 = _tmpl$2();
+                      insert(_el$178, error);
+                      return _el$178;
                     }
-                  }), _el$177);
-                  _el$177.$$click = () => startTopic();
-                  createRenderEffect(() => _el$177.disabled = !isConfigured || syncing());
-                  return _el$173;
+                  }), _el$179);
+                  _el$179.$$click = () => startTopic();
+                  createRenderEffect(() => _el$179.disabled = !isConfigured || syncing());
+                  return _el$175;
                 })();
               },
               get children() {
-                var _el$137 = _tmpl$48(),
-                  _el$138 = _el$137.firstChild,
-                  _el$139 = _el$138.firstChild,
-                  _el$141 = _el$139.nextSibling,
-                  _el$142 = _el$141.firstChild,
-                  _el$146 = _el$138.nextSibling,
-                  _el$156 = _el$146.firstChild;
-                  _el$156.firstChild;
-                  var _el$158 = _el$146.nextSibling;
-                insert(_el$139, () => topic().name);
-                insert(_el$138, createComponent(Show, {
+                var _el$139 = _tmpl$47(),
+                  _el$140 = _el$139.firstChild,
+                  _el$141 = _el$140.firstChild,
+                  _el$143 = _el$141.nextSibling,
+                  _el$144 = _el$143.firstChild,
+                  _el$148 = _el$140.nextSibling,
+                  _el$158 = _el$148.firstChild;
+                  _el$158.firstChild;
+                  var _el$160 = _el$148.nextSibling;
+                insert(_el$141, () => topic().name);
+                insert(_el$140, createComponent(Show, {
                   get when() {
                     return topic().kind === 'discussion';
                   },
                   get children() {
-                    var _el$140 = _tmpl$41();
-                    insert(_el$140, () => topic().description);
-                    return _el$140;
+                    var _el$142 = _tmpl$39();
+                    insert(_el$142, () => topic().description);
+                    return _el$142;
                   }
-                }), _el$141);
-                insert(_el$137, createComponent(Show, {
+                }), _el$143);
+                insert(_el$139, createComponent(Show, {
                   get when() {
-                    return memo(() => topic().kind === 'talk')() ? topic().id : null;
+                    return memo(() => !!(topic().kind === 'talk' || topic().kind === 'list'))() ? `${topic().id}:${topic().kind}` : null;
                   },
                   keyed: true,
                   children: () => createComponent(TalkDescription, {
@@ -7477,7 +7629,12 @@ function Workspace(props) {
                       return topic();
                     },
                     api: api,
-                    onBusyChange: setTalkWriting,
+                    get writing() {
+                      return memo(() => topic().kind === 'list')() && listWriting();
+                    },
+                    get onBusyChange() {
+                      return topic().kind === 'list' ? setListWriting : setTalkWriting;
+                    },
                     onUpdated: updated => rememberChange({
                       ...updated,
                       parentId: topics().find(item => item.id === updated.id)?.parentId ?? null
@@ -7485,129 +7642,129 @@ function Workspace(props) {
                       dimSidebar: false
                     })
                   })
-                }), _el$146);
-                insert(_el$137, createComponent(Show, {
+                }), _el$148);
+                insert(_el$139, createComponent(Show, {
                   get when() {
                     return error();
                   },
                   get children() {
-                    var _el$143 = _tmpl$4(),
-                      _el$144 = _el$143.firstChild,
-                      _el$145 = _el$144.nextSibling;
-                    insert(_el$143, error, _el$144);
-                    _el$145.$$click = () => setError('');
-                    return _el$143;
+                    var _el$145 = _tmpl$4(),
+                      _el$146 = _el$145.firstChild,
+                      _el$147 = _el$146.nextSibling;
+                    insert(_el$145, error, _el$146);
+                    _el$147.$$click = () => setError('');
+                    return _el$145;
                   }
-                }), _el$146);
-                insert(_el$146, createComponent(Show, {
+                }), _el$148);
+                insert(_el$148, createComponent(Show, {
                   get when() {
                     return projectsEnabled && returnProjectId();
                   },
                   get children() {
-                    var _el$147 = _tmpl$42();
-                    _el$147.$$click = () => selectProject(returnProjectId());
-                    return _el$147;
+                    var _el$149 = _tmpl$41();
+                    _el$149.$$click = () => selectProject(returnProjectId());
+                    return _el$149;
                   }
-                }), _el$156);
-                insert(_el$146, createComponent(Show, {
+                }), _el$158);
+                insert(_el$148, createComponent(Show, {
                   get when() {
                     return topics().find(item => item.id === topic().parentId);
                   },
                   children: parent => (() => {
-                    var _el$178 = _tmpl$50();
-                      _el$178.firstChild;
-                    _el$178.$$click = () => selectTopic(parent().id);
-                    insert(_el$178, () => parent().name, null);
-                    return _el$178;
+                    var _el$180 = _tmpl$49();
+                      _el$180.firstChild;
+                    _el$180.$$click = () => selectTopic(parent().id);
+                    insert(_el$180, () => parent().name, null);
+                    return _el$180;
                   })()
-                }), _el$156);
-                insert(_el$146, createComponent(Show, {
+                }), _el$158);
+                insert(_el$148, createComponent(Show, {
                   get when() {
                     return topic().kind !== 'discussion';
                   },
                   get children() {
-                    var _el$148 = _tmpl$44(),
-                      _el$149 = _el$148.firstChild,
-                      _el$150 = _el$149.nextSibling,
-                      _el$151 = _el$150.nextSibling,
-                      _el$152 = _el$151.nextSibling;
-                      _el$152.firstChild;
-                    insert(_el$150, topicMilestoneLabel);
-                    _el$152.addEventListener("change", event => {
+                    var _el$150 = _tmpl$43(),
+                      _el$151 = _el$150.firstChild,
+                      _el$152 = _el$151.nextSibling,
+                      _el$153 = _el$152.nextSibling,
+                      _el$154 = _el$153.nextSibling;
+                      _el$154.firstChild;
+                    insert(_el$152, topicMilestoneLabel);
+                    _el$154.addEventListener("change", event => {
                       const id = topic().id;
                       const next = event.currentTarget.value ? Number(event.currentTarget.value) : null;
                       event.currentTarget.value = String(topic().milestoneId ?? '');
                       assignMilestone(id, next);
                     });
-                    insert(_el$152, createComponent(Show, {
+                    insert(_el$154, createComponent(Show, {
                       get when() {
                         return memo(() => !!topic().milestoneId)() && !milestones().some(item => item.id === topic().milestoneId);
                       },
                       get children() {
-                        var _el$154 = _tmpl$43();
-                          _el$154.firstChild;
-                        insert(_el$154, () => topic().milestoneId, null);
-                        createRenderEffect(() => _el$154.value = topic().milestoneId);
-                        return _el$154;
+                        var _el$156 = _tmpl$42();
+                          _el$156.firstChild;
+                        insert(_el$156, () => topic().milestoneId, null);
+                        createRenderEffect(() => _el$156.value = topic().milestoneId);
+                        return _el$156;
                       }
                     }), null);
-                    insert(_el$152, createComponent(For, {
+                    insert(_el$154, createComponent(For, {
                       get each() {
                         return milestones();
                       },
                       children: item => (() => {
-                        var _el$180 = _tmpl$8();
-                        insert(_el$180, () => item.name, null);
-                        insert(_el$180, () => item.state === 'closed' ? ' (closed)' : '', null);
-                        createRenderEffect(() => _el$180.value = item.id);
-                        return _el$180;
+                        var _el$182 = _tmpl$8();
+                        insert(_el$182, () => item.name, null);
+                        insert(_el$182, () => item.state === 'closed' ? ' (closed)' : '', null);
+                        createRenderEffect(() => _el$182.value = item.id);
+                        return _el$182;
                       })()
                     }), null);
                     createRenderEffect(_p$ => {
-                      var _v$57 = !!assignmentBusy()[topic().id],
-                        _v$58 = topicMilestoneLabel(),
-                        _v$59 = assignmentBusy()[topic().id] || !milestonesLoaded();
-                      _v$57 !== _p$.e && _el$148.classList.toggle("is-pending", _p$.e = _v$57);
-                      _v$58 !== _p$.t && setAttribute(_el$148, "title", _p$.t = _v$58);
-                      _v$59 !== _p$.a && (_el$152.disabled = _p$.a = _v$59);
+                      var _v$58 = !!assignmentBusy()[topic().id],
+                        _v$59 = topicMilestoneLabel(),
+                        _v$60 = assignmentBusy()[topic().id] || !milestonesLoaded();
+                      _v$58 !== _p$.e && _el$150.classList.toggle("is-pending", _p$.e = _v$58);
+                      _v$59 !== _p$.t && setAttribute(_el$150, "title", _p$.t = _v$59);
+                      _v$60 !== _p$.a && (_el$154.disabled = _p$.a = _v$60);
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined,
                       a: undefined
                     });
-                    createRenderEffect(() => _el$152.value = topic().milestoneId ?? '');
-                    return _el$148;
+                    createRenderEffect(() => _el$154.value = topic().milestoneId ?? '');
+                    return _el$150;
                   }
-                }), _el$156);
-                _el$156.$$click = () => requestStatusChange(topic());
-                insert(_el$156, () => statusLabel(topic().id) || (topic().state === 'open' ? 'Open' : 'Closed'), null);
-                insert(_el$158, createComponent(For, {
+                }), _el$158);
+                _el$158.$$click = () => requestStatusChange(topic());
+                insert(_el$158, () => statusLabel(topic().id) || (topic().state === 'open' ? 'Open' : 'Closed'), null);
+                insert(_el$160, createComponent(For, {
                   get each() {
                     return displayedTags();
                   },
                   children: tag => (() => {
-                    var _el$181 = _tmpl$51(),
-                      _el$182 = _el$181.firstChild,
-                      _el$183 = _el$182.nextSibling,
-                      _el$184 = _el$183.nextSibling;
-                    insert(_el$183, () => tag.name);
-                    _el$184.$$click = () => changeTag(topic().id, tag.name, 'remove');
+                    var _el$183 = _tmpl$50(),
+                      _el$184 = _el$183.firstChild,
+                      _el$185 = _el$184.nextSibling,
+                      _el$186 = _el$185.nextSibling;
+                    insert(_el$185, () => tag.name);
+                    _el$186.$$click = () => changeTag(topic().id, tag.name, 'remove');
                     createRenderEffect(_p$ => {
-                      var _v$67 = !!(tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase()),
-                        _v$68 = tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase(),
-                        _v$69 = tag.description || tag.name,
-                        _v$70 = `#${tag.color}`,
-                        _v$71 = Boolean(tagOperations()[topic().id]),
-                        _v$72 = `Remove tag ${tag.name}`,
-                        _v$73 = `Remove tag ${tag.name}`;
-                      _v$67 !== _p$.e && _el$181.classList.toggle("is-pending", _p$.e = _v$67);
-                      _v$68 !== _p$.t && setAttribute(_el$181, "aria-busy", _p$.t = _v$68);
-                      _v$69 !== _p$.a && setAttribute(_el$181, "title", _p$.a = _v$69);
-                      _v$70 !== _p$.o && setStyleProperty(_el$182, "background", _p$.o = _v$70);
-                      _v$71 !== _p$.i && (_el$184.disabled = _p$.i = _v$71);
-                      _v$72 !== _p$.n && setAttribute(_el$184, "aria-label", _p$.n = _v$72);
-                      _v$73 !== _p$.s && setAttribute(_el$184, "title", _p$.s = _v$73);
+                      var _v$68 = !!(tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase()),
+                        _v$69 = tagOperations()[topic().id]?.name.toLowerCase() === tag.name.toLowerCase(),
+                        _v$70 = tag.description || tag.name,
+                        _v$71 = `#${tag.color}`,
+                        _v$72 = Boolean(tagOperations()[topic().id]),
+                        _v$73 = `Remove tag ${tag.name}`,
+                        _v$74 = `Remove tag ${tag.name}`;
+                      _v$68 !== _p$.e && _el$183.classList.toggle("is-pending", _p$.e = _v$68);
+                      _v$69 !== _p$.t && setAttribute(_el$183, "aria-busy", _p$.t = _v$69);
+                      _v$70 !== _p$.a && setAttribute(_el$183, "title", _p$.a = _v$70);
+                      _v$71 !== _p$.o && setStyleProperty(_el$184, "background", _p$.o = _v$71);
+                      _v$72 !== _p$.i && (_el$186.disabled = _p$.i = _v$72);
+                      _v$73 !== _p$.n && setAttribute(_el$186, "aria-label", _p$.n = _v$73);
+                      _v$74 !== _p$.s && setAttribute(_el$186, "title", _p$.s = _v$74);
                       return _p$;
                     }, {
                       e: undefined,
@@ -7618,198 +7775,198 @@ function Workspace(props) {
                       n: undefined,
                       s: undefined
                     });
-                    return _el$181;
+                    return _el$183;
                   })()
                 }), null);
-                insert(_el$158, createComponent(Show, {
+                insert(_el$160, createComponent(Show, {
                   get when() {
                     return tagEditing() === topic().id;
                   },
                   get fallback() {
                     return (() => {
-                      var _el$185 = _tmpl$52();
-                      _el$185.$$click = startTag;
-                      createRenderEffect(() => _el$185.disabled = Boolean(tagOperations()[topic().id]) || !isConfigured);
-                      return _el$185;
+                      var _el$187 = _tmpl$51();
+                      _el$187.$$click = startTag;
+                      createRenderEffect(() => _el$187.disabled = Boolean(tagOperations()[topic().id]) || !isConfigured);
+                      return _el$187;
                     })();
                   },
                   get children() {
-                    var _el$159 = _tmpl$45(),
-                      _el$160 = _el$159.firstChild,
-                      _el$161 = _el$160.nextSibling,
-                      _el$162 = _el$161.nextSibling,
-                      _el$163 = _el$162.nextSibling;
-                    _el$159.$$keydown = event => {
+                    var _el$161 = _tmpl$44(),
+                      _el$162 = _el$161.firstChild,
+                      _el$163 = _el$162.nextSibling,
+                      _el$164 = _el$163.nextSibling,
+                      _el$165 = _el$164.nextSibling;
+                    _el$161.$$keydown = event => {
                       if (event.key === 'Escape') {
                         event.preventDefault();
                         setTagEditing(null);
                       }
                     };
-                    _el$159.addEventListener("submit", event => {
+                    _el$161.addEventListener("submit", event => {
                       event.preventDefault();
                       changeTag(topic().id, tagDrafts()[topic().id] || '', 'add');
                     });
-                    _el$160.$$input = event => setTagDrafts(previous => ({
+                    _el$162.$$input = event => setTagDrafts(previous => ({
                       ...previous,
                       [topic().id]: event.currentTarget.value
                     }));
-                    use(element => requestAnimationFrame(() => element.focus()), _el$160);
-                    insert(_el$161, createComponent(For, {
+                    use(element => requestAnimationFrame(() => element.focus()), _el$162);
+                    insert(_el$163, createComponent(For, {
                       get each() {
                         return knownTags().filter(tag => !topic().tags.some(entry => entry.name.toLowerCase() === tag.name.toLowerCase()));
                       },
                       children: tag => (() => {
-                        var _el$186 = _tmpl$8();
-                        createRenderEffect(() => _el$186.value = tag.name);
-                        return _el$186;
+                        var _el$188 = _tmpl$8();
+                        createRenderEffect(() => _el$188.value = tag.name);
+                        return _el$188;
                       })()
                     }));
-                    _el$163.$$click = () => setTagEditing(null);
-                    createRenderEffect(() => _el$162.disabled = !(tagDrafts()[topic().id] || '').trim());
-                    createRenderEffect(() => _el$160.value = tagDrafts()[topic().id] || '');
-                    return _el$159;
+                    _el$165.$$click = () => setTagEditing(null);
+                    createRenderEffect(() => _el$164.disabled = !(tagDrafts()[topic().id] || '').trim());
+                    createRenderEffect(() => _el$162.value = tagDrafts()[topic().id] || '');
+                    return _el$161;
                   }
                 }), null);
-                insert(_el$137, createComponent(Show, {
+                insert(_el$139, createComponent(Show, {
                   get when() {
                     return !['note', 'list'].includes(topic().kind);
                   },
                   get children() {
                     return [(() => {
-                      var _el$164 = _tmpl$46();
+                      var _el$166 = _tmpl$45();
                       var _ref$6 = messageList;
-                      typeof _ref$6 === "function" ? use(_ref$6, _el$164) : messageList = _el$164;
-                      insert(_el$164, createComponent(For, {
+                      typeof _ref$6 === "function" ? use(_ref$6, _el$166) : messageList = _el$166;
+                      insert(_el$166, createComponent(For, {
                         get each() {
                           return currentMessages();
                         },
                         children: message => (() => {
-                          var _el$187 = _tmpl$54(),
-                            _el$188 = _el$187.firstChild,
-                            _el$189 = _el$188.nextSibling,
+                          var _el$189 = _tmpl$53(),
                             _el$190 = _el$189.firstChild,
-                            _el$191 = _el$190.firstChild,
-                            _el$192 = _el$191.nextSibling,
-                            _el$195 = _el$190.nextSibling,
-                            _el$196 = _el$195.firstChild,
-                            _el$197 = _el$196.nextSibling;
-                          insert(_el$188, () => (message.sender || message.author).slice(0, 1));
-                          insert(_el$191, () => message.sender || message.author);
-                          insert(_el$192, () => formatTime(message.time));
-                          insert(_el$189, createComponent(Show, {
+                            _el$191 = _el$190.nextSibling,
+                            _el$192 = _el$191.firstChild,
+                            _el$193 = _el$192.firstChild,
+                            _el$194 = _el$193.nextSibling,
+                            _el$197 = _el$192.nextSibling,
+                            _el$198 = _el$197.firstChild,
+                            _el$199 = _el$198.nextSibling;
+                          insert(_el$190, () => (message.sender || message.author).slice(0, 1));
+                          insert(_el$193, () => message.sender || message.author);
+                          insert(_el$194, () => formatTime(message.time));
+                          insert(_el$191, createComponent(Show, {
                             get when() {
                               return message.replyTo;
                             },
                             get children() {
-                              var _el$193 = _tmpl$53();
-                                _el$193.firstChild;
-                              insert(_el$193, () => message.replyTo.author, null);
-                              createRenderEffect(() => setAttribute(_el$193, "href", message.replyTo.url));
-                              return _el$193;
+                              var _el$195 = _tmpl$52();
+                                _el$195.firstChild;
+                              insert(_el$195, () => message.replyTo.author, null);
+                              createRenderEffect(() => setAttribute(_el$195, "href", message.replyTo.url));
+                              return _el$195;
                             }
-                          }), _el$195);
-                          insert(_el$189, createComponent(MessageText, {
+                          }), _el$197);
+                          insert(_el$191, createComponent(MessageText, {
                             get text() {
                               return message.text;
                             }
-                          }), _el$195);
-                          insert(_el$195, createComponent(For, {
+                          }), _el$197);
+                          insert(_el$197, createComponent(For, {
                             get each() {
                               return message.reactions;
                             },
                             children: type => (() => {
-                              var _el$198 = _tmpl$55();
-                              insert(_el$198, () => reactionSymbols[type][0]);
+                              var _el$200 = _tmpl$54();
+                              insert(_el$200, () => reactionSymbols[type][0]);
                               createRenderEffect(_p$ => {
-                                var _v$77 = reactionSymbols[type][1],
-                                  _v$78 = reactionSymbols[type][1];
-                                _v$77 !== _p$.e && setAttribute(_el$198, "aria-label", _p$.e = _v$77);
-                                _v$78 !== _p$.t && setAttribute(_el$198, "title", _p$.t = _v$78);
+                                var _v$78 = reactionSymbols[type][1],
+                                  _v$79 = reactionSymbols[type][1];
+                                _v$78 !== _p$.e && setAttribute(_el$200, "aria-label", _p$.e = _v$78);
+                                _v$79 !== _p$.t && setAttribute(_el$200, "title", _p$.t = _v$79);
                                 return _p$;
                               }, {
                                 e: undefined,
                                 t: undefined
                               });
-                              return _el$198;
+                              return _el$200;
                             })()
-                          }), _el$196);
-                          _el$196.$$click = () => openReactions(message.id);
-                          _el$197.$$click = () => replyTo(message);
+                          }), _el$198);
+                          _el$198.$$click = () => openReactions(message.id);
+                          _el$199.$$click = () => replyTo(message);
                           createRenderEffect(_p$ => {
-                            var _v$74 = !!(message.author === 'You'),
-                              _v$75 = message.sender ? `Declared sender: ${message.sender} · GitHub author: ${message.author}` : message.author,
-                              _v$76 = message.time.toISOString();
-                            _v$74 !== _p$.e && _el$188.classList.toggle("avatar-you", _p$.e = _v$74);
-                            _v$75 !== _p$.t && setAttribute(_el$191, "title", _p$.t = _v$75);
-                            _v$76 !== _p$.a && setAttribute(_el$192, "datetime", _p$.a = _v$76);
+                            var _v$75 = !!(message.author === 'You'),
+                              _v$76 = message.sender ? `Declared sender: ${message.sender} · GitHub author: ${message.author}` : message.author,
+                              _v$77 = message.time.toISOString();
+                            _v$75 !== _p$.e && _el$190.classList.toggle("avatar-you", _p$.e = _v$75);
+                            _v$76 !== _p$.t && setAttribute(_el$193, "title", _p$.t = _v$76);
+                            _v$77 !== _p$.a && setAttribute(_el$194, "datetime", _p$.a = _v$77);
                             return _p$;
                           }, {
                             e: undefined,
                             t: undefined,
                             a: undefined
                           });
-                          return _el$187;
+                          return _el$189;
                         })()
                       }), null);
-                      insert(_el$164, createComponent(Show, {
+                      insert(_el$166, createComponent(Show, {
                         get when() {
                           return outgoing();
                         },
                         children: entry => (() => {
-                          var _el$199 = _tmpl$56(),
-                            _el$200 = _el$199.firstChild,
-                            _el$201 = _el$200.nextSibling,
+                          var _el$201 = _tmpl$55(),
                             _el$202 = _el$201.firstChild,
-                            _el$203 = _el$202.firstChild,
-                            _el$204 = _el$203.nextSibling;
-                          insert(_el$204, () => entry().state === 'pending' ? 'Sending…' : 'Delivery unconfirmed — check GitHub before resending');
-                          insert(_el$201, createComponent(MessageText, {
+                            _el$203 = _el$202.nextSibling,
+                            _el$204 = _el$203.firstChild,
+                            _el$205 = _el$204.firstChild,
+                            _el$206 = _el$205.nextSibling;
+                          insert(_el$206, () => entry().state === 'pending' ? 'Sending…' : 'Delivery unconfirmed — check GitHub before resending');
+                          insert(_el$203, createComponent(MessageText, {
                             get text() {
                               return entry().text;
                             }
                           }), null);
-                          createRenderEffect(() => setAttribute(_el$199, "aria-busy", entry().state === 'pending'));
-                          return _el$199;
+                          createRenderEffect(() => setAttribute(_el$201, "aria-busy", entry().state === 'pending'));
+                          return _el$201;
                         })()
                       }), null);
-                      return _el$164;
+                      return _el$166;
                     })(), (() => {
-                      var _el$165 = _tmpl$47(),
-                        _el$166 = _el$165.firstChild,
-                        _el$167 = _el$166.firstChild,
-                        _el$168 = _el$167.nextSibling,
-                        _el$169 = _el$166.nextSibling,
-                        _el$170 = _el$169.firstChild,
-                        _el$171 = _el$170.nextSibling,
-                        _el$172 = _el$171.firstChild;
-                      _el$165.addEventListener("submit", sendMessage);
-                      _el$167.$$keydown = event => {
+                      var _el$167 = _tmpl$46(),
+                        _el$168 = _el$167.firstChild,
+                        _el$169 = _el$168.firstChild,
+                        _el$170 = _el$169.nextSibling,
+                        _el$171 = _el$168.nextSibling,
+                        _el$172 = _el$171.firstChild,
+                        _el$173 = _el$172.nextSibling,
+                        _el$174 = _el$173.firstChild;
+                      _el$167.addEventListener("submit", sendMessage);
+                      _el$169.$$keydown = event => {
                         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) sendMessage(event);
                       };
-                      _el$167.$$input = event => setDrafts(previous => ({
+                      _el$169.$$input = event => setDrafts(previous => ({
                         ...previous,
                         [activeId()]: event.currentTarget.value
                       }));
                       var _ref$7 = composerInput;
-                      typeof _ref$7 === "function" ? use(_ref$7, _el$167) : composerInput = _el$167;
-                      insert(_el$171, GITHUB_OWNER, _el$172);
-                      insert(_el$171, GITHUB_REPO, null);
+                      typeof _ref$7 === "function" ? use(_ref$7, _el$169) : composerInput = _el$169;
+                      insert(_el$173, GITHUB_OWNER, _el$174);
+                      insert(_el$173, GITHUB_REPO, null);
                       createRenderEffect(_p$ => {
-                        var _v$60 = `Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`,
-                          _v$61 = Boolean(outgoing());
-                        _v$60 !== _p$.e && setAttribute(_el$167, "aria-label", _p$.e = _v$60);
-                        _v$61 !== _p$.t && (_el$168.disabled = _p$.t = _v$61);
+                        var _v$61 = `Message ${topic().kind === 'discussion' ? '' : '#'}${topic().name}`,
+                          _v$62 = Boolean(outgoing());
+                        _v$61 !== _p$.e && setAttribute(_el$169, "aria-label", _p$.e = _v$61);
+                        _v$62 !== _p$.t && (_el$170.disabled = _p$.t = _v$62);
                         return _p$;
                       }, {
                         e: undefined,
                         t: undefined
                       });
-                      createRenderEffect(() => _el$167.value = draft());
-                      return _el$165;
+                      createRenderEffect(() => _el$169.value = draft());
+                      return _el$167;
                     })()];
                   }
                 }), null);
-                insert(_el$137, createComponent(Show, {
+                insert(_el$139, createComponent(Show, {
                   get when() {
                     return memo(() => topic().kind === 'note')() ? topic().id : null;
                   },
@@ -7831,7 +7988,7 @@ function Workspace(props) {
                     })
                   })
                 }), null);
-                insert(_el$137, createComponent(Show, {
+                insert(_el$139, createComponent(Show, {
                   get when() {
                     return memo(() => topic().kind === 'list')() ? topic().id : null;
                   },
@@ -7841,6 +7998,9 @@ function Workspace(props) {
                       return topic();
                     },
                     api: api,
+                    get writing() {
+                      return listWriting();
+                    },
                     get draftKey() {
                       return `blackboard:${workspaceKey}:list:${topic().id}:draft`;
                     },
@@ -7854,16 +8014,16 @@ function Workspace(props) {
                   })
                 }), null);
                 createRenderEffect(_p$ => {
-                  var _v$62 = `${topic().name} ${['note', 'list'].includes(topic().kind) ? topic().kind : 'chat'}`,
-                    _v$63 = topic().url,
-                    _v$64 = !!(topic().state === 'closed'),
-                    _v$65 = Boolean(closing()[topic().id]),
-                    _v$66 = `${topic().state === 'open' ? 'Open' : 'Closed'} topic: ${topic().state === 'open' ? 'close' : 'reopen'} ${topic().name}`;
-                  _v$62 !== _p$.e && setAttribute(_el$137, "aria-label", _p$.e = _v$62);
-                  _v$63 !== _p$.t && setAttribute(_el$142, "href", _p$.t = _v$63);
-                  _v$64 !== _p$.a && _el$156.classList.toggle("is-closed", _p$.a = _v$64);
-                  _v$65 !== _p$.o && (_el$156.disabled = _p$.o = _v$65);
-                  _v$66 !== _p$.i && setAttribute(_el$156, "aria-label", _p$.i = _v$66);
+                  var _v$63 = `${topic().name} ${['note', 'list'].includes(topic().kind) ? topic().kind : 'chat'}`,
+                    _v$64 = topic().url,
+                    _v$65 = !!(topic().state === 'closed'),
+                    _v$66 = Boolean(closing()[topic().id]),
+                    _v$67 = `${topic().state === 'open' ? 'Open' : 'Closed'} topic: ${topic().state === 'open' ? 'close' : 'reopen'} ${topic().name}`;
+                  _v$63 !== _p$.e && setAttribute(_el$139, "aria-label", _p$.e = _v$63);
+                  _v$64 !== _p$.t && setAttribute(_el$144, "href", _p$.t = _v$64);
+                  _v$65 !== _p$.a && _el$158.classList.toggle("is-closed", _p$.a = _v$65);
+                  _v$66 !== _p$.o && (_el$158.disabled = _p$.o = _v$66);
+                  _v$67 !== _p$.i && setAttribute(_el$158, "aria-label", _p$.i = _v$67);
                   return _p$;
                 }, {
                   e: undefined,
@@ -7872,7 +8032,7 @@ function Workspace(props) {
                   o: undefined,
                   i: undefined
                 });
-                return _el$137;
+                return _el$139;
               }
             });
           }
@@ -7940,42 +8100,42 @@ function Workspace(props) {
         return statusChange();
       },
       children: change => (() => {
-        var _el$205 = _tmpl$57(),
-          _el$206 = _el$205.firstChild,
-          _el$208 = _el$206.nextSibling,
-          _el$209 = _el$208.firstChild,
-          _el$210 = _el$209.nextSibling;
-        _el$205.addEventListener("submit", confirmStatusChange);
-        insert(_el$206, () => change().target === 'closed' ? 'Close this topic?' : 'Reopen this topic?');
-        insert(_el$205, createComponent(Show, {
+        var _el$207 = _tmpl$56(),
+          _el$208 = _el$207.firstChild,
+          _el$210 = _el$208.nextSibling,
+          _el$211 = _el$210.firstChild,
+          _el$212 = _el$211.nextSibling;
+        _el$207.addEventListener("submit", confirmStatusChange);
+        insert(_el$208, () => change().target === 'closed' ? 'Close this topic?' : 'Reopen this topic?');
+        insert(_el$207, createComponent(Show, {
           get when() {
             return statusError();
           },
           get children() {
-            var _el$207 = _tmpl$27();
-            insert(_el$207, statusError);
-            return _el$207;
+            var _el$209 = _tmpl$27();
+            insert(_el$209, statusError);
+            return _el$209;
           }
-        }), _el$208);
-        _el$209.$$click = () => statusDialog.close();
-        insert(_el$210, (() => {
+        }), _el$210);
+        _el$211.$$click = () => statusDialog.close();
+        insert(_el$212, (() => {
           var _c$3 = memo(() => !!statusPending());
           return () => _c$3() ? statusLabel(change().id) : change().target === 'closed' ? 'Close topic' : 'Reopen topic';
         })());
         createRenderEffect(_p$ => {
-          var _v$79 = statusPending(),
-            _v$80 = statusPending(),
-            _v$81 = Boolean(closing()[change().id]);
-          _v$79 !== _p$.e && setAttribute(_el$205, "aria-busy", _p$.e = _v$79);
-          _v$80 !== _p$.t && (_el$209.disabled = _p$.t = _v$80);
-          _v$81 !== _p$.a && (_el$210.disabled = _p$.a = _v$81);
+          var _v$80 = statusPending(),
+            _v$81 = statusPending(),
+            _v$82 = Boolean(closing()[change().id]);
+          _v$80 !== _p$.e && setAttribute(_el$207, "aria-busy", _p$.e = _v$80);
+          _v$81 !== _p$.t && (_el$211.disabled = _p$.t = _v$81);
+          _v$82 !== _p$.a && (_el$212.disabled = _p$.a = _v$82);
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$205;
+        return _el$207;
       })()
     }));
     _el$108.addEventListener("close", () => {
@@ -7995,20 +8155,20 @@ function Workspace(props) {
         return Object.keys(reactionSymbols);
       },
       children: type => (() => {
-        var _el$211 = _tmpl$58();
-        _el$211.$$click = () => toggleReaction(type);
-        insert(_el$211, () => reactionSymbols[type][0]);
+        var _el$213 = _tmpl$57();
+        _el$213.$$click = () => toggleReaction(type);
+        insert(_el$213, () => reactionSymbols[type][0]);
         createRenderEffect(_p$ => {
-          var _v$82 = !!Boolean(ownReaction(type)),
-            _v$83 = Boolean(ownReaction(type)),
-            _v$84 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
+          var _v$83 = !!Boolean(ownReaction(type)),
+            _v$84 = Boolean(ownReaction(type)),
             _v$85 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
-            _v$86 = reactionLoading() || reactionBusy() || !reactionViewer();
-          _v$82 !== _p$.e && _el$211.classList.toggle("is-selected", _p$.e = _v$82);
-          _v$83 !== _p$.t && setAttribute(_el$211, "aria-pressed", _p$.t = _v$83);
-          _v$84 !== _p$.a && setAttribute(_el$211, "aria-label", _p$.a = _v$84);
-          _v$85 !== _p$.o && setAttribute(_el$211, "title", _p$.o = _v$85);
-          _v$86 !== _p$.i && (_el$211.disabled = _p$.i = _v$86);
+            _v$86 = `${ownReaction(type) ? 'Remove' : 'Add'} ${reactionSymbols[type][1]}`,
+            _v$87 = reactionLoading() || reactionBusy() || !reactionViewer();
+          _v$83 !== _p$.e && _el$213.classList.toggle("is-selected", _p$.e = _v$83);
+          _v$84 !== _p$.t && setAttribute(_el$213, "aria-pressed", _p$.t = _v$84);
+          _v$85 !== _p$.a && setAttribute(_el$213, "aria-label", _p$.a = _v$85);
+          _v$86 !== _p$.o && setAttribute(_el$213, "title", _p$.o = _v$86);
+          _v$87 !== _p$.i && (_el$213.disabled = _p$.i = _v$87);
           return _p$;
         }, {
           e: undefined,
@@ -8017,7 +8177,7 @@ function Workspace(props) {
           o: undefined,
           i: undefined
         });
-        return _el$211;
+        return _el$213;
       })()
     }));
     insert(_el$108, createComponent(Show, {
@@ -8058,74 +8218,74 @@ function Workspace(props) {
         return removeTarget();
       },
       children: item => (() => {
-        var _el$212 = _tmpl$61(),
-          _el$213 = _el$212.firstChild,
-          _el$216 = _el$213.nextSibling;
-        insert(_el$213, (() => {
+        var _el$214 = _tmpl$60(),
+          _el$215 = _el$214.firstChild,
+          _el$218 = _el$215.nextSibling;
+        insert(_el$215, (() => {
           var _c$4 = memo(() => !!confirmDelete());
           return () => _c$4() ? 'Permanently Delete?' : `Remove ${item().name}`;
         })());
-        insert(_el$212, createComponent(Show, {
+        insert(_el$214, createComponent(Show, {
           get when() {
             return removeError();
           },
           get children() {
-            var _el$214 = _tmpl$27();
-            insert(_el$214, removeError);
-            return _el$214;
+            var _el$216 = _tmpl$27();
+            insert(_el$216, removeError);
+            return _el$216;
           }
-        }), _el$216);
-        insert(_el$212, createComponent(Show, {
+        }), _el$218);
+        insert(_el$214, createComponent(Show, {
           get when() {
             return removalPending();
           },
           get children() {
-            var _el$215 = _tmpl$28();
-            insert(_el$215, () => statusLabel(item().id));
-            return _el$215;
+            var _el$217 = _tmpl$28();
+            insert(_el$217, () => statusLabel(item().id));
+            return _el$217;
           }
-        }), _el$216);
-        insert(_el$216, createComponent(Show, {
+        }), _el$218);
+        insert(_el$218, createComponent(Show, {
           get when() {
             return confirmDelete();
           },
           get fallback() {
             return [(() => {
-              var _el$219 = _tmpl$62();
-              _el$219.$$click = () => confirmRemoval('archived');
-              createRenderEffect(() => _el$219.disabled = Boolean(closing()[item().id]));
-              return _el$219;
-            })(), (() => {
-              var _el$220 = _tmpl$63();
-              _el$220.$$click = () => setConfirmDelete(true);
-              createRenderEffect(() => _el$220.disabled = Boolean(closing()[item().id]));
-              return _el$220;
-            })(), (() => {
-              var _el$221 = _tmpl$64();
-              _el$221.$$click = () => removeDialog.close();
-              createRenderEffect(() => _el$221.disabled = removalPending());
+              var _el$221 = _tmpl$61();
+              _el$221.$$click = () => confirmRemoval('archived');
+              createRenderEffect(() => _el$221.disabled = Boolean(closing()[item().id]));
               return _el$221;
+            })(), (() => {
+              var _el$222 = _tmpl$62();
+              _el$222.$$click = () => setConfirmDelete(true);
+              createRenderEffect(() => _el$222.disabled = Boolean(closing()[item().id]));
+              return _el$222;
+            })(), (() => {
+              var _el$223 = _tmpl$63();
+              _el$223.$$click = () => removeDialog.close();
+              createRenderEffect(() => _el$223.disabled = removalPending());
+              return _el$223;
             })()];
           },
           get children() {
             return [(() => {
-              var _el$217 = _tmpl$59();
-              _el$217.$$click = () => confirmRemoval('deleted');
-              createRenderEffect(() => _el$217.disabled = Boolean(closing()[item().id]));
-              return _el$217;
+              var _el$219 = _tmpl$58();
+              _el$219.$$click = () => confirmRemoval('deleted');
+              createRenderEffect(() => _el$219.disabled = Boolean(closing()[item().id]));
+              return _el$219;
             })(), (() => {
-              var _el$218 = _tmpl$60();
-              _el$218.$$click = () => {
+              var _el$220 = _tmpl$59();
+              _el$220.$$click = () => {
                 setConfirmDelete(false);
                 setRemoveError('');
               };
-              createRenderEffect(() => _el$218.disabled = removalPending());
-              return _el$218;
+              createRenderEffect(() => _el$220.disabled = removalPending());
+              return _el$220;
             })()];
           }
         }));
-        createRenderEffect(() => setAttribute(_el$212, "aria-busy", removalPending()));
-        return _el$212;
+        createRenderEffect(() => setAttribute(_el$214, "aria-busy", removalPending()));
+        return _el$214;
       })()
     }));
     createRenderEffect(_p$ => {

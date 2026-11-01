@@ -1,10 +1,12 @@
 import { createSignal, For, Show } from 'solid-js';
-import { appendChecklistItem, changeChecklistItem, checklist } from './list-state.js';
+import { appendChecklistItem, changeChecklistItem, checklist, insertChecklistChild } from './list-state.js';
 
 export default function ListView(props) {
   const [newItem, setNewItem] = createSignal('');
   const [editingIndex, setEditingIndex] = createSignal(null);
   const [editingText, setEditingText] = createSignal('');
+  const [subitemParent, setSubitemParent] = createSignal(null);
+  const [subitemText, setSubitemText] = createSignal('');
   const [sourceEditing, setSourceEditing] = createSignal(false);
   const [sourceDraft, setSourceDraft] = createSignal('');
   const [sourceBase, setSourceBase] = createSignal('');
@@ -41,7 +43,7 @@ export default function ListView(props) {
     setError('');
   }
   async function write(nextBody, afterSuccess = () => {}, expectedBody = props.topic.description) {
-    if (busy() || uncertain() || nextBody === expectedBody) return;
+    if (busy() || props.writing || uncertain() || nextBody === expectedBody) return;
     setBusy(true); props.onBusyChange(true); setError('');
     setPendingBody(nextBody); setBaseBody(expectedBody); pendingSuccess = afterSuccess;
     try {
@@ -69,6 +71,7 @@ export default function ListView(props) {
     finally { setBusy(false); }
   }
   async function openSource() {
+    if (busy() || props.writing) return;
     setBusy(true); setError('');
     try {
       const latest = await props.api.readList(props.topic.id);
@@ -80,25 +83,28 @@ export default function ListView(props) {
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   }
-  function editItem(item) { setEditingIndex(item.index); setEditingText(item.text); }
+  function editItem(item) { setSubitemParent(null); setEditingIndex(item.index); setEditingText(item.text); }
+  function addSubitem(item) { setEditingIndex(null); setSubitemParent(item.index); setSubitemText(''); }
 
   return <section class="list-view" aria-label={`${props.topic.name} list`}>
     <div class="list-toolbar">
       <span class="list-progress">{completed()} of {parsed().items.length} complete</span>
-      <Show when={!sourceEditing()}><button type="button" disabled={busy() || uncertain()} onClick={openSource}>{hasSourceDraft() ? 'Resume Markdown draft' : 'Edit Markdown'}</button></Show>
+      <Show when={!sourceEditing()}><button type="button" disabled={busy() || props.writing || uncertain()} onClick={openSource}>{hasSourceDraft() ? 'Resume Markdown draft' : 'Edit Markdown'}</button></Show>
     </div>
     <Show when={error()}><p class="list-error" role="alert">{error()}</p></Show>
     <Show when={uncertain()}><button type="button" class="list-check-save" disabled={busy()} onClick={checkSave}>Check GitHub before trying again</button></Show>
     <Show when={sourceEditing()} fallback={<>
       <div class="list-items">
         <Show when={parsed().items.length} fallback={<p class="muted">No items yet.</p>}>
-          <For each={parsed().items}>{(item) => <div class="list-item" classList={{ 'is-pending': busy() }}>
+          <For each={parsed().items}>{(item) => <>
+          <div class="list-item" classList={{ 'is-pending': busy() }} style={{ 'padding-left': `${Math.min(item.depth, 8) * 20}px` }}>
             <Show when={editingIndex() === item.index} fallback={<>
-              <label><input type="checkbox" checked={item.checked} disabled={busy() || uncertain()}
+              <label><input type="checkbox" checked={item.checked} disabled={busy() || props.writing || uncertain()}
                 onChange={(event) => { event.currentTarget.checked = item.checked; write(changeChecklistItem(props.topic.description, item.index, 'toggle')); }} />
-                <span classList={{ 'is-complete': item.checked }}>{item.text}</span></label>
-              <button type="button" disabled={busy() || uncertain()} onClick={() => editItem(item)} aria-label={`Edit ${item.text}`}>Edit</button>
-              <button type="button" disabled={busy() || uncertain()} onClick={() => write(changeChecklistItem(props.topic.description, item.index, 'remove'))} aria-label={`Remove ${item.text}`}>Remove</button>
+                <span>{item.text}</span></label>
+              <button type="button" disabled={busy() || props.writing || uncertain()} onClick={() => addSubitem(item)} aria-label={`Add subitem to ${item.text}`}>+ Subitem</button>
+              <button type="button" disabled={busy() || props.writing || uncertain()} onClick={() => editItem(item)} aria-label={`Edit ${item.text}`}>Edit</button>
+              <button type="button" disabled={busy() || props.writing || uncertain()} onClick={() => write(changeChecklistItem(props.topic.description, item.index, 'remove'), () => setSubitemParent(null))} aria-label={`Remove ${item.text}`}>Remove</button>
             </>}>
               <form class="list-item-edit" onSubmit={(event) => { event.preventDefault(); if (editingText().trim()) write(changeChecklistItem(props.topic.description, item.index, editingText()), () => setEditingIndex(null)); }}>
                 <input type="text" aria-label="Edit list item" value={editingText()} maxLength="500" disabled={busy() || uncertain()} onInput={(event) => setEditingText(event.currentTarget.value)} />
@@ -106,15 +112,27 @@ export default function ListView(props) {
                 <button type="button" disabled={busy()} onClick={() => setEditingIndex(null)}>Cancel</button>
               </form>
             </Show>
-          </div>}</For>
+          </div>
+          <Show when={subitemParent() === item.index}>
+            <form class="list-add list-subitem-add" style={{ 'margin-left': `${Math.min(item.depth + 1, 8) * 20}px` }}
+              onSubmit={(event) => { event.preventDefault(); if (subitemText().trim()) write(insertChecklistChild(props.topic.description, item.index, subitemText()), () => { setSubitemParent(null); setSubitemText(''); }); }}>
+              <input type="text" aria-label={`New subitem for ${item.text}`} placeholder="Add a subitem" value={subitemText()} maxLength="500"
+                disabled={busy() || props.writing || uncertain()} ref={(element) => requestAnimationFrame(() => element.focus())}
+                onInput={(event) => setSubitemText(event.currentTarget.value)} />
+              <button type="submit" disabled={busy() || props.writing || uncertain() || !subitemText().trim()}>Add</button>
+              <button type="button" disabled={busy()} onClick={() => setSubitemParent(null)}>Cancel</button>
+            </form>
+          </Show>
+          </>}</For>
         </Show>
-        <Show when={parsed().lines.some((line) => line.trim() && !/^\s*[-*+]\s+\[[ xX]\]\s+/.test(line))}>
+        <Show when={parsed().lines.slice((parsed().items[0]?.index ?? parsed().lines.length) + 1)
+          .some((line) => line.trim() && !/^\s*[-*+]\s+\[[ xX]\]\s+/.test(line))}>
           <p class="list-other-content">This list also contains other Markdown. Use Edit Markdown to view or change it.</p>
         </Show>
         <form class="list-add" onSubmit={(event) => { event.preventDefault(); if (newItem().trim()) write(appendChecklistItem(props.topic.description, newItem()), () => setNewItem('')); }}>
           <input type="text" aria-label="New list item" placeholder="Add an item" value={newItem()} maxLength="500" disabled={busy() || uncertain()}
             onInput={(event) => setNewItem(event.currentTarget.value)} />
-          <button type="submit" disabled={busy() || uncertain() || !newItem().trim()}>Add</button>
+          <button type="submit" disabled={busy() || props.writing || uncertain() || !newItem().trim()}>Add</button>
         </form>
       </div>
     </>}>

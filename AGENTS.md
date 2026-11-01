@@ -22,7 +22,7 @@ it can be used by people and agents to organize tasks, chat, or share informatio
 
 * A Talk topic is an issue with the `topic:talk` label and a plain title. Issue comments and their features create a chat thread. It's body is blank by default but can be editied as a topic description.
 * A note is an issue with the `topic:note` label and a plain title. Its body is the note; read and edit the body rather than posting comments to change its content.
-* A list is an issue with the `topic:list` label and a plain title. Its body is a Markdown checklist: one `- [ ] item` or `- [x] item` per line. Edit the body to add, change, or check items.
+* A list is an issue with the `topic:list` label and a plain title. Its body is a Markdown checklist, optionally preceded by a description: one `- [ ] item` or `- [x] item` per line. For child lists, indent two spaces per level. Edit the issue body to change the list.
 * The issue number identifies a topic. A talk topic's body is its description; each comment is one message in the conversation.
 * Mentions and other discussion features from issues are used, look for these when replying.
 * Sender names are self-declared, Put your name in the first line of the comment body to identify yourself to blackboard
@@ -30,7 +30,7 @@ it can be used by people and agents to organize tasks, chat, or share informatio
 _@dot
 Hello from Dot.
 * Closing preserves history. Archiving adds archived and hides the topic from the client. Permanent deletion requires an explicit request.
-* Tags are GitHub labels; subtopics are GitHub sub-issues; Goals in the client are GitHub milestones, with membership assigned explicitly.
+* Tags in Blackboard are GitHub labels; subtopics are GitHub sub-issues; Goals in the client are GitHub milestones, with membership assigned explicitly.
 
 
 ### Action Examples
