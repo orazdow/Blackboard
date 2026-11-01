@@ -5013,8 +5013,8 @@ function RepositorySelector(props) {
     };
     var _ref$2 = trigger;
     typeof _ref$2 === "function" ? use(_ref$2, _el$2) : trigger = _el$2;
-    insert(_el$5, () => props.repository?.repo || 'Connect repository');
-    insert(_el$6, () => props.repository?.owner || 'Blackboard');
+    insert(_el$5, () => props.repository?.repo || 'Blackboard');
+    insert(_el$6, () => props.repository?.owner || 'No repository');
     insert(_el$, createComponent(Show, {
       get when() {
         return open();

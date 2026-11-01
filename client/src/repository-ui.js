@@ -99,7 +99,7 @@ export default function RepositorySelector(props) {
     <button ref={trigger} type="button" class="repository-trigger" title={props.repository ? repositoryName(props.repository) : 'Connect repository'} aria-label={props.repository ? `Repository ${repositoryName(props.repository)}` : 'Connect repository'} aria-expanded={open()} aria-controls="repository-menu"
       onClick={() => { if (open()) closeMenu(); else setOpen(true); }}>
       <img class="workspace-icon" src="./lyra.jpg" alt="" />
-      <span class="repository-heading"><span class="repository-title">{props.repository?.repo || 'Connect repository'}</span><span class="muted">{props.repository?.owner || 'Blackboard'}</span></span>
+      <span class="repository-heading"><span class="repository-title">{props.repository?.repo || 'Blackboard'}</span><span class="muted">{props.repository?.owner || 'No repository'}</span></span>
       <svg class="repository-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
     </button>
     <Show when={open()}><div id="repository-menu" class="repository-menu" aria-label="Repository selection" aria-busy={busy()}>
