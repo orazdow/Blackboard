@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import { appendChecklistItem, changeChecklistItem, checklist, insertChecklistChild } from './list-state.js';
 import { InlineMarkdown } from './markdown.js';
+import { splitAuthorMetadata, withAuthorMetadata } from './author-metadata.js';
 
 export default function ListView(props) {
   const [newItem, setNewItem] = createSignal('');
@@ -78,7 +79,7 @@ export default function ListView(props) {
       const latest = await props.api.readList(props.topic.id);
       const saved = savedSource();
       setSourceBase(saved?.base ?? latest.description);
-      setSourceDraft(saved?.text ?? latest.description);
+      setSourceDraft(saved?.text ?? splitAuthorMetadata(latest.description).content);
       setSourceEditing(true);
       if (saved && saved.base !== latest.description) setError('This list changed since your draft was saved. Copy your draft before editing the latest version.');
     } catch (failure) { setError(failure.message); }
@@ -137,11 +138,11 @@ export default function ListView(props) {
         </form>
       </div>
     </>}>
-      <form class="list-source-editor" onSubmit={(event) => { event.preventDefault(); write(sourceDraft(), () => { clearSourceDraft(); setSourceEditing(false); }, sourceBase()); }}>
+      <form class="list-source-editor" onSubmit={(event) => { event.preventDefault(); write(withAuthorMetadata(sourceBase(), sourceDraft()), () => { clearSourceDraft(); setSourceEditing(false); }, sourceBase()); }}>
         <textarea aria-label="List Markdown" value={sourceDraft()} disabled={busy() || uncertain()}
           onInput={(event) => { const text = event.currentTarget.value; setSourceDraft(text); rememberSource(text); }} />
         <div class="list-source-actions">
-          <button type="submit" disabled={busy() || uncertain() || sourceDraft() === sourceBase()}>Save</button>
+          <button type="submit" disabled={busy() || uncertain() || withAuthorMetadata(sourceBase(), sourceDraft()) === sourceBase()}>Save</button>
           <button type="button" disabled={busy()} onClick={() => { clearSourceDraft(); setSourceEditing(false); setError(''); }}>Cancel</button>
         </div>
       </form>

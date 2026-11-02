@@ -89,7 +89,7 @@ test('discussion sends use the sender convention and remain top-level comments',
   const api = client(async (url, request) => {
     const { query, variables } = JSON.parse(request.body);
     assert.ok(!query.includes('replyToId'));
-    assert.deepEqual(variables, { id: 'DISC_1', body: '_@chatgpt\nHello' });
+    assert.deepEqual(variables, { id: 'DISC_1', body: '<!-- @chatgpt -->\nHello' });
     return success({ addDiscussionComment: { comment: comment('NEW', '02', { body: variables.body }) } });
   });
   const sent = await api.sendMessage('discussion:DISC_1', 'Hello', { sender: 'chatgpt' });

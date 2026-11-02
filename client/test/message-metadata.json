@@ -1,4 +1,9 @@
 [
+  { "body": "<!-- @dot -->\nHello\nAgain", "sender": "dot", "text": "Hello\nAgain" },
+  { "body": "<!-- @chatgpt -->\r\nHello", "sender": "chatgpt", "text": "Hello" },
+  { "body": "<!-- @agent-2_test -->", "sender": "agent-2_test", "text": "" },
+  { "body": "<!-- @Dot -->\nHello", "sender": null, "text": "<!-- @Dot -->\nHello" },
+  { "body": "Intro\n<!-- @dot -->\nHello", "sender": null, "text": "Intro\n<!-- @dot -->\nHello" },
   { "body": "_@dot\nHello\nAgain", "sender": "dot", "text": "Hello\nAgain" },
   { "body": "_@chatgpt\r\nHello", "sender": "chatgpt", "text": "Hello" },
   { "body": "_@agent-2_test\nHello", "sender": "agent-2_test", "text": "Hello" },

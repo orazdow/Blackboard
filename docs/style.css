@@ -360,9 +360,10 @@ textarea::placeholder {
 .chat-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .chat-header { position: relative; flex: 0 0 var(--header-height); padding: var(--space-6) var(--space-8); border-bottom: 1px solid var(--color-border); }
 .chat-header h2 { margin: 0 0 var(--space-1); color: #e2f2ff; font-size: 1.1rem; text-decoration: underline; text-underline-offset: 0.18em; }
-.chat-header h2 { padding-right: 6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-header h2 { padding-right: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-header p { margin: 0; padding-right: 6rem; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-header-actions { position: absolute; right: var(--space-8); top: var(--space-6); display: flex; align-items: center; gap: var(--space-3); }
+.topic-author { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); font-size: 0.72rem; }
 .talk-description { flex: 0 1 auto; min-height: 0; padding: var(--space-4) var(--space-8) 0; }
 .talk-description-display { min-height: 1.5rem; }
 .talk-description-display .talk-description-text { max-height: 12rem; margin: 0; overflow-y: auto; overflow-wrap: anywhere; }
@@ -520,7 +521,8 @@ textarea::placeholder {
   .chat-header, .message-list { padding: var(--space-4); }
   .note-view { padding: var(--space-4); }
   .list-view { padding: var(--space-4); }
-  .chat-header h2 { padding-right: 6rem; }
+  .chat-header h2 { padding-right: 8rem; }
+  .topic-author { max-width: 7rem; }
   .talk-description { padding: var(--space-3) var(--space-4) 0; }
   .chat-header-actions { right: var(--space-4); top: var(--space-4); }
   .chat-topic-controls { padding: var(--space-3) var(--space-4) 0; }

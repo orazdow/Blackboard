@@ -1,3 +1,5 @@
+import { splitAuthorMetadata, validAuthor } from './author-metadata.js';
+
 export const ARCHIVED_LABEL = 'archived';
 export const TALK_LABEL = 'topic:talk';
 export const NOTE_LABEL = 'topic:note';
@@ -7,17 +9,18 @@ const REACTION_TYPES = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'roc
 const REACTION_ENUMS = ['THUMBS_UP', 'THUMBS_DOWN', 'LAUGH', 'CONFUSED', 'HEART', 'HOORAY', 'ROCKET', 'EYES'];
 export const isDiscussionId = (id) => typeof id === 'string' && /^discussion:[A-Za-z0-9_=-]{1,256}$/.test(id);
 
-const validSender = (sender) => typeof sender === 'string' && sender.length <= 64 && /^[a-z]/.test(sender) && !/[^a-z0-9_-]/.test(sender);
-
 function encodeMessage(text, sender) {
   if (sender == null) return text;
-  if (!validSender(sender)) throw new GitHubError('Sender must be 1–64 lowercase letters, digits, underscores or hyphens, starting with a letter.');
-  return `_@${sender}\n${text}`;
+  if (!validAuthor(sender)) throw new GitHubError('Sender must be 1–64 lowercase letters, digits, underscores or hyphens, starting with a letter.');
+  return `<!-- @${sender} -->\n${text}`;
 }
 
 function decodeMessage(body) {
+  const declared = splitAuthorMetadata(body);
+  if (declared.author) return { sender: declared.author, text: declared.content };
+  // Existing comments can still use the earlier visible marker.
   const marker = /^_@([^\r\n]*)(?:\r?\n|$)/.exec(body);
-  if (marker && validSender(marker[1])) {
+  if (marker && validAuthor(marker[1])) {
     return { sender: marker[1], text: body.slice(marker[0].length) };
   }
   // Read older messages using hidden metadata for compatibility.
@@ -27,7 +30,7 @@ function decodeMessage(body) {
     if (!match) continue;
     try {
       const metadata = JSON.parse(match[1]);
-      if (validSender(metadata.sender)) return {
+      if (validAuthor(metadata.sender)) return {
         sender: metadata.sender,
         text: match === header ? body.slice(match[0].length) : body.slice(0, match.index).trimEnd(),
       };

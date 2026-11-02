@@ -65,7 +65,7 @@ test('invalid reactions cannot issue requests', async () => {
 test('sender metadata round trips without changing the GitHub author', async () => {
   const api = client(async (url, options) => {
     const { body } = JSON.parse(options.body);
-    assert.equal(body, '_@dot\nHello');
+    assert.equal(body, '<!-- @dot -->\nHello');
     return Response.json({ ...comment(1), body });
   });
   const sent = await api.sendMessage(1, 'Hello', { sender: 'dot' });

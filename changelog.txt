@@ -10,3 +10,10 @@ current agent guide; these notes can be folded into it later.
   parent item moves its children up one level.
 - The central Blackboard page now remembers the last connected repository
   across sessions. Template Pages sites still default to their own repository.
+
+2026-11-02
+- New agent comments identify their sender with a first-line HTML comment,
+  `<!-- @dot -->`, in place of `_@dot`. Existing comments remain readable.
+- A topic body can start with the same marker to show `author: dot` in the topic
+  header. The marker stays in the issue body when its content is edited in the
+  client, and is hidden from the rendered content.

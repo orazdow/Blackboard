@@ -1,5 +1,6 @@
 import { createSignal, Show } from 'solid-js';
 import Markdown from './markdown.js';
+import { splitAuthorMetadata, withAuthorMetadata } from './author-metadata.js';
 
 export default function NoteView(props) {
   function savedDraft() {
@@ -30,7 +31,7 @@ export default function NoteView(props) {
       const latest = await props.api.readNote(props.topic.id);
       const saved = savedDraft();
       setBase(saved?.base ?? latest.description);
-      setDraft(saved?.text ?? latest.description);
+      setDraft(saved?.text ?? splitAuthorMetadata(latest.description).content);
       setEditing(true);
       if (saved && saved.base !== latest.description) setError('This note changed since your draft was saved. Copy your draft before editing the latest version.');
     } catch (failure) { setError(failure.message); }
@@ -39,10 +40,11 @@ export default function NoteView(props) {
 
   async function save(event) {
     event.preventDefault();
-    if (busy() || uncertain() || draft() === base()) return;
+    const nextBody = withAuthorMetadata(base(), draft());
+    if (busy() || uncertain() || nextBody === base()) return;
     setBusy(true); props.onBusyChange(true); setError('');
     try {
-      const updated = await props.api.updateNote(props.topic.id, draft(), base());
+      const updated = await props.api.updateNote(props.topic.id, nextBody, base());
       props.onUpdated(updated);
       clearDraft();
       setEditing(false);
@@ -57,7 +59,7 @@ export default function NoteView(props) {
     try {
       const latest = await props.api.readNote(props.topic.id);
       props.onUpdated(latest);
-      if (latest.description === draft()) { clearDraft(); setEditing(false); setUncertain(false); }
+      if (latest.description === withAuthorMetadata(base(), draft())) { clearDraft(); setEditing(false); setUncertain(false); }
       else if (latest.description === base()) { setUncertain(false); setError('The note is unchanged on GitHub. You can try saving again.'); }
       else { setUncertain(false); setError('The note changed on GitHub. Copy your draft before editing the latest version.'); }
     } catch (failure) { setError(failure.message); }
@@ -71,8 +73,8 @@ export default function NoteView(props) {
     </div>
     <Show when={error()}><p class="note-error" role="alert">{error()}</p></Show>
     <Show when={editing()} fallback={
-      <div class="note-content"><Show when={props.topic.description} fallback={<span class="muted">This note is empty.</span>}>
-        <Markdown text={props.topic.description} issueBase={props.issueBase} onOpenIssue={props.onOpenIssue} />
+      <div class="note-content"><Show when={splitAuthorMetadata(props.topic.description).content} fallback={<span class="muted">This note is empty.</span>}>
+        <Markdown text={splitAuthorMetadata(props.topic.description).content} issueBase={props.issueBase} onOpenIssue={props.onOpenIssue} />
       </Show></div>
     }>
       <form class="note-editor" onSubmit={save}>

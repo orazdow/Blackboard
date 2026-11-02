@@ -10,6 +10,7 @@ import RepositorySelector from './repository-ui.js';
 import { canForgetRepository, normalizeRecentRepositories, parseRepository, recentRepositoriesAfterConnect, recentRepositoriesAfterForget, repositoryKey, repositoryName } from './repository-state.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
 import { readView, urlForView } from './view-route.js';
+import { splitAuthorMetadata } from './author-metadata.js';
 import { quoteReply } from './message-format.js';
 import { createMilestoneTracker, goalProgress, listCompletion, sortMilestones } from './milestone-state.js';
 
@@ -303,6 +304,7 @@ function Workspace(props) {
     : syncFailed() ? 'GitHub sync failed; waiting to retry'
     : lastSync() ? `Last synced ${lastSync().toLocaleString()}` : 'Waiting to sync with GitHub';
   const topic = () => topics().find((item) => item.id === activeId());
+  const topicAuthor = () => splitAuthorMetadata(topic()?.description).author;
   const displayedTags = () => {
     const tags = topic()?.tags || [];
     const operation = tagOperations()[activeId()];
@@ -1112,6 +1114,7 @@ function Workspace(props) {
           <h2>{topic().name}</h2>
           <Show when={topic().kind === 'discussion'}><p>{topic().description}</p></Show>
           <div class="chat-header-actions">
+            <Show when={topicAuthor()}><span class="topic-author" title={`Declared author: ${topicAuthor()}`}>author: {topicAuthor()}</span></Show>
             <a class="preview-badge" href={topic().url} target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
         </header>

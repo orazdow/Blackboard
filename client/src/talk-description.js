@@ -1,10 +1,14 @@
 import { createSignal, Show } from 'solid-js';
 import { listDescription, replaceListDescription } from './list-state.js';
 import Markdown from './markdown.js';
+import { splitAuthorMetadata, withAuthorMetadata } from './author-metadata.js';
 
 export default function TalkDescription(props) {
   const isList = () => props.topic.kind === 'list';
-  const description = (body) => isList() ? listDescription(body) : body;
+  const description = (body) => {
+    const content = splitAuthorMetadata(body).content;
+    return isList() ? listDescription(content) : content;
+  };
   const read = () => isList() ? props.api.readList(props.topic.id) : props.api.readTalk(props.topic.id);
   const update = (body, expectedBody) => isList()
     ? props.api.updateList(props.topic.id, body, expectedBody)
@@ -30,7 +34,8 @@ export default function TalkDescription(props) {
   }
 
   async function write(nextText) {
-    const nextBody = isList() ? replaceListDescription(base(), nextText) : nextText;
+    const content = splitAuthorMetadata(base()).content;
+    const nextBody = withAuthorMetadata(base(), isList() ? replaceListDescription(content, nextText) : nextText);
     if (busy() || props.writing || uncertain() || nextBody === base()) return;
     setPendingBody(nextBody);
     setBusy(true); props.onBusyChange(true); setError('');
