@@ -1,5 +1,6 @@
 import { createSignal, Show } from 'solid-js';
 import { listDescription, replaceListDescription } from './list-state.js';
+import Markdown from './markdown.js';
 
 export default function TalkDescription(props) {
   const isList = () => props.topic.kind === 'list';
@@ -63,7 +64,7 @@ export default function TalkDescription(props) {
   return <div class="talk-description" classList={{ 'is-editing': editing() }}>
     <Show when={error()}><p class="talk-description-error" role="alert">{error()}</p></Show>
     <Show when={editing()} fallback={<div class="talk-description-display" classList={{ 'has-description': Boolean(description(props.topic.description)) }}>
-      <Show when={description(props.topic.description)}><p class="talk-description-text">{description(props.topic.description)}</p></Show>
+      <Show when={description(props.topic.description)}><Markdown class="talk-description-text" text={description(props.topic.description)} issueBase={props.issueBase} onOpenIssue={props.onOpenIssue} /></Show>
       <button type="button" class="talk-description-edit" disabled={busy() || props.writing} onClick={edit}>
         {busy() ? 'Loading…' : description(props.topic.description) ? 'Edit' : '+ add topic body'}
       </button>

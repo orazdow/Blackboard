@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js';
+import Markdown from './markdown.js';
 
 export default function NoteView(props) {
   function savedDraft() {
@@ -70,7 +71,9 @@ export default function NoteView(props) {
     </div>
     <Show when={error()}><p class="note-error" role="alert">{error()}</p></Show>
     <Show when={editing()} fallback={
-      <div class="note-content">{props.topic.description || <span class="muted">This note is empty.</span>}</div>
+      <div class="note-content"><Show when={props.topic.description} fallback={<span class="muted">This note is empty.</span>}>
+        <Markdown text={props.topic.description} issueBase={props.issueBase} onOpenIssue={props.onOpenIssue} />
+      </Show></div>
     }>
       <form class="note-editor" onSubmit={save}>
         <textarea aria-label="Note content" value={draft()} disabled={busy()}
