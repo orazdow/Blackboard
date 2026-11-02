@@ -5,10 +5,12 @@ import ProjectBoard from './project-ui.js';
 import NoteView from './note-ui.js';
 import ListView from './list-ui.js';
 import TalkDescription from './talk-description.js';
+import Markdown from './markdown.js';
 import RepositorySelector from './repository-ui.js';
 import { canForgetRepository, normalizeRecentRepositories, parseRepository, recentRepositoriesAfterConnect, recentRepositoriesAfterForget, repositoryKey, repositoryName } from './repository-state.js';
 import { createTopicTracker, topicRows } from './topic-state.js';
-import { messageBlocks, messageTokens, quoteReply } from './message-format.js';
+import { readView, urlForView } from './view-route.js';
+import { quoteReply } from './message-format.js';
 import { createMilestoneTracker, goalProgress, listCompletion, sortMilestones } from './milestone-state.js';
 
 const formatTime = (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -30,7 +32,7 @@ export default function App(props = {}) {
   try {
     const requested = new URL(window.location.href).searchParams.get('repo');
     if (requested) initial = parseRepository(requested);
-    else {
+    else if (!new URL(window.location.href).searchParams.has('view') || defaults === null) {
       const sessionSaved = sessionStorage.getItem(siteSelectionKey);
       const saved = sessionSaved || (defaults === null ? storage?.getItem(siteSelectionKey) : null);
       if (saved) {
@@ -62,6 +64,7 @@ export default function App(props = {}) {
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('repo', repositoryName(next));
+      if (!repository() || repositoryKey(repository()) !== repositoryKey(next)) url.searchParams.delete('view');
       history.replaceState(null, '', url);
     } catch { /* URL updates are optional. */ }
     batch(() => { setPermitted(true); setConnection({ repository: next, credentials: saved }); });
@@ -90,6 +93,7 @@ export default function App(props = {}) {
       try {
         const url = new URL(window.location.href);
         url.searchParams.delete('repo');
+        url.searchParams.delete('view');
         history.replaceState(null, '', url);
       } catch { /* URL updates are optional. */ }
     }
@@ -133,6 +137,7 @@ function UnconnectedWorkspace(props) {
 function Workspace(props) {
   const GITHUB_OWNER = props.repository.owner;
   const GITHUB_REPO = props.repository.repo;
+  const issueBase = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues/`;
   const isConfigured = Boolean(props.credentials?.token && GITHUB_OWNER && GITHUB_REPO);
   const projectsEnabled = props.projectsEnabled === true;
   const isProjectConfigured = projectsEnabled && Boolean(props.credentials?.projectToken);
@@ -142,6 +147,7 @@ function Workspace(props) {
   const activeMilestoneKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:milestone`;
   const activeProjectKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:project`;
   const topicKindKey = `blackboard:${GITHUB_OWNER}/${GITHUB_REPO}:new-topic-kind`;
+  const initialView = readView(window.location.href);
   const storedTopicId = (value) => isDiscussionId(value) ? value : Number(value);
   const compareMessages = (a, b) => a.time - b.time || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
   function savedTopicKind() {
@@ -170,6 +176,7 @@ function Workspace(props) {
     } catch { return null; }
   }
   function savedTopic() {
+    if (initialView?.kind === 'topic') return initialView.id;
     try {
       const id = storedTopicId(sessionStorage.getItem(topicSelectionKey));
       return isDiscussionId(id) || Number.isSafeInteger(id) && id > 0 ? id : null;
@@ -185,7 +192,7 @@ function Workspace(props) {
   const [projects, setProjects] = createSignal([]);
   const [projectsLoading, setProjectsLoading] = createSignal(false);
   const [projectsError, setProjectsError] = createSignal('');
-  const [activeProjectId, setActiveProjectId] = createSignal(isConfigured && isProjectConfigured ? savedProject() : null);
+  const [activeProjectId, setActiveProjectId] = createSignal(isConfigured && isProjectConfigured && !initialView ? savedProject() : null);
   const [returnProjectId, setReturnProjectId] = createSignal(null);
   createEffect(() => {
     if (!projectsEnabled) return;
@@ -201,7 +208,8 @@ function Workspace(props) {
   const [tagOperations, setTagOperations] = createSignal({});
   const [milestones, setMilestones] = createSignal([]);
   const [milestonesLoaded, setMilestonesLoaded] = createSignal(false);
-  const [activeMilestoneId, setActiveMilestoneId] = createSignal(isConfigured ? savedMilestone() : null);
+  const [activeMilestoneId, setActiveMilestoneId] = createSignal(isConfigured
+    ? initialView?.kind === 'goal' ? initialView.id : initialView ? null : savedMilestone() : null);
   const selectedMilestone = () => milestones().find((item) => item.id === activeMilestoneId());
   const [milestoneEditing, setMilestoneEditing] = createSignal(null);
   const [milestoneName, setMilestoneName] = createSignal('');
@@ -425,6 +433,11 @@ function Workspace(props) {
             if (present === (operation.target === 'add')) setTagOperations((previous) => ({ ...previous, [key]: null }));
           }
         });
+        const routed = readView(window.location.href);
+        if (routed?.kind === 'topic' && !topics().some((item) => item.id === routed.id)) {
+          try { history.replaceState(null, '', urlForView(window.location.href, selectedView())); }
+          catch { /* The selected topic still works without URL updates. */ }
+        }
       }
       const milestoneReadRevision = milestoneRevision;
       const incomingMilestones = await api.listMilestones({ includeClosed: true });
@@ -465,7 +478,27 @@ function Workspace(props) {
     });
   }
 
-  async function selectTopic(id, fromProject = null) {
+  function selectedView() {
+    if (activeProjectId()) return null;
+    if (activeMilestoneId()) return { kind: 'goal', id: activeMilestoneId() };
+    if (activeId()) return { kind: 'topic', id: activeId() };
+    return null;
+  }
+
+  function navigateTo(view) {
+    try {
+      const current = readView(window.location.href);
+      if (current?.kind === view.kind && current.id === view.id) return;
+      if (!current) {
+        const previous = selectedView();
+        if (previous) history.replaceState(null, '', urlForView(window.location.href, previous));
+      }
+      history.pushState(null, '', urlForView(window.location.href, view));
+    } catch { /* View switching still works without browser history. */ }
+  }
+
+  async function selectTopic(id, fromProject = null, recordHistory = true) {
+    if (recordHistory) navigateTo({ kind: 'topic', id });
     setActiveProjectId(null);
     setReturnProjectId(fromProject);
     setTagEditing(null);
@@ -487,7 +520,15 @@ function Workspace(props) {
     }
   }
 
-  function selectMilestone(id) {
+  function openIssueInClient(number) {
+    const linked = topics().find((item) => item.kind !== 'discussion' && item.id === number);
+    if (!linked) return false;
+    void selectTopic(linked.id);
+    return true;
+  }
+
+  function selectMilestone(id, recordHistory = true) {
+    if (recordHistory) navigateTo({ kind: 'goal', id });
     setActiveProjectId(null);
     setReturnProjectId(null);
     setTagEditing(null);
@@ -620,7 +661,7 @@ function Workspace(props) {
       <section class="chat-panel empty-chat">
         <h2>{milestonesLoaded() ? 'Goal unavailable' : 'Loading goal…'}</h2>
         <Show when={error()}><p class="api-error" role="alert">{error()}</p></Show>
-        <button type="button" onClick={() => setActiveMilestoneId(null)}>Back to topics</button>
+        <button type="button" onClick={() => { if (activeId()) void selectTopic(activeId()); else setActiveMilestoneId(null); }}>Back to topics</button>
       </section>
     }>{(item) => <section class="chat-panel milestone-overview" aria-label={`${item().name} goal`}>
       <header class="chat-header">
@@ -670,19 +711,7 @@ function Workspace(props) {
   function MessageText(props) {
     const isDeclaredSender = (name) => currentMessages().some((message) =>
       message.sender?.toLowerCase() === name.toLowerCase() && message.author.toLowerCase() !== name.toLowerCase());
-    const Inline = (inlineProps) => <For each={messageTokens(inlineProps.text)}>{(token) => {
-      if (token.type === 'code') return <code>{token.text}</code>;
-      if (token.type === 'link') return <a href={token.url} target="_blank" rel="noopener noreferrer">{token.text}</a>;
-      if (token.type === 'mention') return (
-        <Show when={!isDeclaredSender(token.name)} fallback={<span class="message-mention" title="Declared Blackboard identity">{token.text}</span>}>
-          <a class="message-mention" href={`https://github.com/${encodeURIComponent(token.name)}`} target="_blank" rel="noopener noreferrer">{token.text}</a>
-        </Show>
-      );
-      return token.text;
-    }}</For>;
-    return <div class="message-text"><For each={messageBlocks(props.text)}>{(block) => (
-      block.quote ? <blockquote><Inline text={block.text} /></blockquote> : <div><Inline text={block.text} /></div>
-    )}</For></div>;
+    return <Markdown class="message-text" text={props.text} issueBase={issueBase} isDeclaredSender={isDeclaredSender} onOpenIssue={openIssueInClient} />;
   }
 
   function TopicMarker(props) {
@@ -747,12 +776,22 @@ function Workspace(props) {
 
   onMount(() => {
     const refreshVisible = () => { if (!document.hidden) refresh(); };
+    const restoreView = () => {
+      const view = readView(window.location.href);
+      if (view?.kind === 'topic') {
+        if (topics().some((item) => item.id === view.id)) void selectTopic(view.id, null, false);
+        else { setActiveProjectId(null); setActiveMilestoneId(null); setActiveId(view.id); }
+      } else if (view?.kind === 'goal') selectMilestone(view.id, false);
+      else { setActiveProjectId(null); setActiveMilestoneId(null); setActiveId(null); }
+    };
     refreshVisible();
     const timer = setInterval(refreshVisible, POLL_INTERVAL_MS);
     document.addEventListener('visibilitychange', refreshVisible);
+    window.addEventListener('popstate', restoreView);
     onCleanup(() => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshVisible);
+      window.removeEventListener('popstate', restoreView);
     });
   });
 
@@ -803,7 +842,6 @@ function Workspace(props) {
       channelRevision += 1;
       batch(() => {
         setTopics((previous) => [...previous.filter((item) => item.id !== created.id), created]);
-        setActiveId(created.id);
         setPendingTopic(null);
       });
       setCreating(false);
@@ -814,11 +852,11 @@ function Workspace(props) {
         const created = failure.createdChannel;
         channelRevision += 1;
         setTopics((previous) => [...previous.filter((item) => item.id !== created.id), created]);
-        setActiveId(created.id);
         setPendingTopic(null);
         setCreating(false);
         closeTopicForm();
         setError(failure.message);
+        void selectTopic(created.id);
         return;
       }
       setCreateUncertain(failure.uncertain);
@@ -1079,7 +1117,7 @@ function Workspace(props) {
         </header>
 
         <Show when={topic().kind === 'talk' || topic().kind === 'list' ? `${topic().id}:${topic().kind}` : null} keyed>{() =>
-          <TalkDescription topic={topic()} api={api} writing={topic().kind === 'list' && listWriting()}
+          <TalkDescription topic={topic()} api={api} issueBase={issueBase} onOpenIssue={openIssueInClient} writing={topic().kind === 'list' && listWriting()}
             onBusyChange={topic().kind === 'list' ? setListWriting : setTalkWriting}
             onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>
@@ -1197,11 +1235,11 @@ function Workspace(props) {
         </form>
         </Show>
         <Show when={topic().kind === 'note' ? topic().id : null} keyed>{() =>
-          <NoteView topic={topic()} api={api} draftKey={`blackboard:${workspaceKey}:note:${topic().id}:draft`} onBusyChange={setNoteWriting}
+          <NoteView topic={topic()} api={api} issueBase={issueBase} onOpenIssue={openIssueInClient} draftKey={`blackboard:${workspaceKey}:note:${topic().id}:draft`} onBusyChange={setNoteWriting}
             onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>
         <Show when={topic().kind === 'list' ? topic().id : null} keyed>{() =>
-          <ListView topic={topic()} api={api} writing={listWriting()}
+          <ListView topic={topic()} api={api} issueBase={issueBase} onOpenIssue={openIssueInClient} writing={listWriting()}
             draftKey={`blackboard:${workspaceKey}:list:${topic().id}:draft`} onBusyChange={setListWriting}
             onUpdated={(updated) => rememberChange({ ...updated, parentId: topics().find((item) => item.id === updated.id)?.parentId ?? null }, { dimSidebar: false })} />
         }</Show>

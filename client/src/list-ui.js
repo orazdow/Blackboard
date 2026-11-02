@@ -1,5 +1,6 @@
 import { createSignal, For, Show } from 'solid-js';
 import { appendChecklistItem, changeChecklistItem, checklist, insertChecklistChild } from './list-state.js';
+import { InlineMarkdown } from './markdown.js';
 
 export default function ListView(props) {
   const [newItem, setNewItem] = createSignal('');
@@ -101,7 +102,7 @@ export default function ListView(props) {
             <Show when={editingIndex() === item.index} fallback={<>
               <label><input type="checkbox" checked={item.checked} disabled={busy() || props.writing || uncertain()}
                 onChange={(event) => { event.currentTarget.checked = item.checked; write(changeChecklistItem(props.topic.description, item.index, 'toggle')); }} />
-                <span>{item.text}</span></label>
+                <span><InlineMarkdown text={item.text} issueBase={props.issueBase} onOpenIssue={props.onOpenIssue} /></span></label>
               <button type="button" disabled={busy() || props.writing || uncertain()} onClick={() => addSubitem(item)} aria-label={`Add subitem to ${item.text}`}>+ Subitem</button>
               <button type="button" disabled={busy() || props.writing || uncertain()} onClick={() => editItem(item)} aria-label={`Edit ${item.text}`}>Edit</button>
               <button type="button" disabled={busy() || props.writing || uncertain()} onClick={() => write(changeChecklistItem(props.topic.description, item.index, 'remove'), () => setSubitemParent(null))} aria-label={`Remove ${item.text}`}>Remove</button>

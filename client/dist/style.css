@@ -365,7 +365,7 @@ textarea::placeholder {
 .chat-header-actions { position: absolute; right: var(--space-8); top: var(--space-6); display: flex; align-items: center; gap: var(--space-3); }
 .talk-description { flex: 0 1 auto; min-height: 0; padding: var(--space-4) var(--space-8) 0; }
 .talk-description-display { min-height: 1.5rem; }
-.talk-description-display .talk-description-text { max-height: 12rem; margin: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.talk-description-display .talk-description-text { max-height: 12rem; margin: 0; overflow-y: auto; overflow-wrap: anywhere; }
 .talk-description-edit { display: block; padding: 0; background: transparent; color: var(--color-muted); font-size: 0.8rem; }
 .talk-description-display.has-description .talk-description-edit { margin-top: var(--space-2); }
 .talk-description-edit:hover:not(:disabled), .talk-description-edit:focus-visible { color: var(--color-text); background: transparent; }
@@ -401,7 +401,7 @@ textarea::placeholder {
 .note-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .note-type { color: var(--color-muted); font-size: 0.75rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; }
 .note-toolbar button, .note-editor-actions button { padding: var(--space-2) var(--space-3); font-size: 0.8rem; }
-.note-content { flex: 1; min-height: 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; font-size: 0.95rem; }
+.note-content { flex: 1; min-height: 0; overflow: auto; overflow-wrap: anywhere; line-height: 1.65; font-size: 0.95rem; }
 .note-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); }
 .note-editor textarea { flex: 1; min-height: 180px; width: 100%; resize: vertical; padding: var(--space-4); line-height: 1.55; font-size: 0.9rem; }
 .note-editor-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
@@ -455,12 +455,31 @@ textarea::placeholder {
 .message-meta { display: flex; align-items: baseline; gap: var(--space-3); }
 .message-author { font-size: 0.875rem; font-weight: 650; }
 .message-meta time { color: var(--color-muted); font-size: 0.7rem; }
-.message-text { margin: var(--space-1) 0 0; font-size: 0.9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-text { margin: var(--space-1) 0 0; font-size: 0.9rem; overflow-wrap: anywhere; }
 .message-text blockquote { margin: var(--space-2) 0; padding: var(--space-1) var(--space-3); border-left: 2px solid #446080; color: var(--color-muted); background: #13243a; white-space: pre-wrap; }
 .message-text a { color: var(--color-accent); text-decoration: none; }
 .message-text a:hover { text-decoration: underline; }
 .message-mention { color: #b5d3f9; background: #243a54; border-radius: 3px; padding: 0 3px; }
 .message-text code { padding: 1px 4px; border-radius: 3px; background: #192e46; }
+.markdown-content { overflow-wrap: anywhere; }
+.markdown-content p { margin: 0 0 0.65em; white-space: pre-wrap; }
+.markdown-content > :last-child { margin-bottom: 0; }
+.markdown-content h1, .markdown-content h2, .markdown-content h3 { margin: 0.9em 0 0.4em; color: var(--color-text); line-height: 1.3; }
+.markdown-content > :first-child { margin-top: 0; }
+.markdown-content h1 { font-size: 1.3em; }
+.markdown-content h2 { font-size: 1.17em; }
+.markdown-content h3 { font-size: 1.05em; }
+.markdown-content ul, .markdown-content ol { margin: 0 0 0.65em; padding-left: 1.6em; }
+.markdown-content li { margin: 0.2em 0; }
+.markdown-content li > ul, .markdown-content li > ol { margin: 0.25em 0; }
+.markdown-content blockquote { margin: 0.65em 0; padding: 0.2em 0.8em; border-left: 2px solid #446080; color: var(--color-muted); background: #13243a; }
+.markdown-content blockquote > :last-child { margin-bottom: 0; }
+.markdown-content pre { max-width: 100%; margin: 0 0 0.65em; padding: 0.65em 0.8em; overflow-x: auto; border-radius: 4px; background: #192e46; white-space: pre; }
+.markdown-content code { padding: 1px 4px; border-radius: 3px; background: #192e46; }
+.markdown-content pre code { padding: 0; background: transparent; }
+.markdown-content a, .list-item label a { color: var(--color-accent); text-decoration: none; }
+.markdown-content a:hover, .list-item label a:hover { text-decoration: underline; }
+.markdown-content hr { margin: 0.8em 0; border: 0; border-top: 1px solid var(--color-border); }
 .message-reply { padding: 2px 6px; height: 24px; color: var(--color-muted); background: transparent; border-radius: 4px; font-size: 0.75rem; opacity: 0; }
 .message:hover .message-reply, .message:focus-within .message-reply { opacity: 1; }
 .message-reply:hover { background: #21394d; color: var(--color-text); }
