@@ -1,0 +1,21 @@
+broad/operational changes:
+
+make every topic type comment-able
+unify topic types back into one: title+body(multiple body edit types)+comments
+devise custom goal /  task / milestone system
+custom reference system, anything can be referenced into the goal system.
+more custom abstraction, some isomorphism to Trello model
+new view paradigm involving goals, more parallel / Trello based
+
+
+specific/immediate changes:
+
+editable comments,
+markdown rendered everywhere
+markdown preview in note / body edit
+notification system
+filter system for sidebar (tags, status),
+pin / move / hide / topics in sidebar.
+quick grouping mechanism
+
+

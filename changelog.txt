@@ -1,0 +1,12 @@
+Blackboard changelog
+
+Informal notes on user-facing behavior and conventions. AGENTS.md remains the
+current agent guide; these notes can be folded into it later.
+
+2026-11-01
+- List topics gained an optional description above the Markdown checklist,
+  edited through the topic body control.
+- Lists gained nested checkbox items using two spaces per level. Removing a
+  parent item moves its children up one level.
+- The central Blackboard page now remembers the last connected repository
+  across sessions. Template Pages sites still default to their own repository.
